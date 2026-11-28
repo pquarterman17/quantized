@@ -4,6 +4,7 @@
 import type { MapPeaksRequest, MapVolumeRequest } from "../../../lib/api/mapAnalysis";
 import { boxColumns } from "../../../lib/mapBoxSpace";
 import type { RoiRect } from "../../../lib/roi";
+import { closeProblem, polygonRegion, type RoiPolygon, type Vertex } from "../../../lib/roiPolygon";
 import type { DataStruct } from "../../../lib/types";
 
 export type MapAnalysisMode = "peaks" | "volume";
@@ -23,11 +24,13 @@ export interface MapAnalysisForm {
   border: string;
   skipEmpty: boolean;
   rule: "pixel" | "trapezoid";
+  /** The polygon drawn on the map, taken as the volume region (replaces the typed rectangle while set). */
+  polygon: Vertex[] | null;
 }
 
 export const emptyForm = (): MapAnalysisForm => ({
   mode: "peaks", model: "gaussian", rotate: false, nPeaks: "", threshold: "0.05", minSep: "4", smooth: "1", window: "8",
-  x0: "", x1: "", y0: "", y1: "", bg: "none", bgValue: "", border: "2", skipEmpty: false, rule: "pixel",
+  x0: "", x1: "", y0: "", y1: "", bg: "none", bgValue: "", border: "2", skipEmpty: false, rule: "pixel", polygon: null,
 });
 
 const num = (t: string): number => (t.trim() === "" ? NaN : Number(t));
@@ -48,7 +51,10 @@ export function buildPeaksRequest(f: MapAnalysisForm): Built<Omit<MapPeaksReques
 
 export function buildVolumeRequest(f: MapAnalysisForm): Built<Omit<MapVolumeRequest, "dataset" | keyof Cols>> {
   const b = [f.x0, f.x1, f.y0, f.y1].map(num);
-  if (b.some((v) => !Number.isFinite(v))) return { error: "Enter all four rectangle bounds as numbers, or use the box drawn on the map." };
+  if (f.polygon) {
+    const problem = closeProblem(f.polygon);
+    if (problem) return { error: problem };
+  } else if (b.some((v) => !Number.isFinite(v))) return { error: "Enter all four rectangle bounds as numbers, or use the box drawn on the map." };
   const bord = num(f.border);
   if (!Number.isInteger(bord) || bord < 1) return { error: "Border width must be a whole number of cells, at least 1." };
   let background: MapVolumeRequest["background"] = { kind: f.bg } as MapVolumeRequest["background"];
@@ -59,7 +65,7 @@ export function buildVolumeRequest(f: MapAnalysisForm): Built<Omit<MapVolumeRequ
   }
   return {
     req: {
-      region: { kind: "rect", x0: b[0]!, x1: b[1]!, y0: b[2]!, y1: b[3]! },
+      region: f.polygon ? polygonRegion({ space: "map", points: f.polygon }) : { kind: "rect", x0: b[0]!, x1: b[1]!, y0: b[2]!, y1: b[3]! },
       background, border: bord, on_nan: f.skipEmpty ? "skip" : "refuse", rule: f.rule,
     },
   };
@@ -74,6 +80,15 @@ export function drawnBounds(data: DataStruct, rect: RoiRect | null, zPick?: numb
   const nums = [rect.x0, rect.x1, rect.y0, rect.y1];
   if (!nums.every(Number.isFinite)) return { error: "The drawn box is not a valid rectangle." };
   return { cols: keys, bounds: [Math.min(rect.x0, rect.x1), Math.max(rect.x0, rect.x1), Math.min(rect.y0, rect.y1), Math.max(rect.y0, rect.y1)] };
+}
+
+/** The drawn polygon's vertices with the X / Y / value columns it was drawn on, or why it cannot be used. */
+export function drawnPolygon(data: DataStruct, polygon: RoiPolygon | null, zPick?: number): { points: Vertex[]; cols: [number, number, number]; error?: undefined } | { error: string; points?: undefined; cols?: undefined } {
+  if (!polygon) return { error: "Draw a polygon on the map first (Polygon tool in the map toolbar)." };
+  const keys = boxColumns(data, polygon, zPick);
+  if (typeof keys === "string") return { error: keys.replace(/box/g, "polygon").replace("type the bounds instead", "choose the columns it was drawn on") };
+  if (!keys) return { error: `The polygon was drawn in ${polygon.space === "q" ? "Q" : "angular"} space, but this map has no such axes.` };
+  return { cols: keys, points: polygon.points.map((p): Vertex => [p[0], p[1]]) };
 }
 
 export const boundText = (v: number): string => String(Number(v.toPrecision(12)));

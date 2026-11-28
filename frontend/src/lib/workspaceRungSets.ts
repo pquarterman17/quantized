@@ -66,6 +66,8 @@ export const NEW_SINCE_V045: ReadonlySet<string> = new Set([
   "PlotView.rowRange",
   // OG20: a saved snapshot result's recorded row range (lib/inputRowRange.ts); measured in workspaceValueGates.
   "AnalysisResult.parameters.rowRange",
+  // A saved ROI of kind "polygon": v0.34.0 and v0.45.0 skip an unknown kind on open (measured in workspaceValueGates).
+  "RoiDef.kind=polygon",
   // Private dataset metadata sidecars (ROW_RANGE_CONTRACT 9.1): see GATED_METADATA_KEYS.
   ...GATED_METADATA_FEATURES,
 ])

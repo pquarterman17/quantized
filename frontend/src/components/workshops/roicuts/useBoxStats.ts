@@ -15,6 +15,7 @@ import type { Dataset } from "../../../lib/types";
 import { boxProblem } from "./cutGuards";
 import { datasetInputsToken } from "../workbench/inputsKey";
 import { useRunStamp } from "../workbench/useRunStamp";
+import { useApp } from "../../../store/useApp";
 
 export interface BoxStatsState {
   boxStats: BoxStats | null;
@@ -32,6 +33,7 @@ export function useBoxStats(active: Dataset | null, mapRoi: RoiRect | null): Box
   const [statsBusy, setStatsBusy] = useState(false);
   const [statsError, setStatsError] = useState<string | null>(null);
   const seq = useRef(0);
+  const polygonDrawn = useApp((s) => s.mapPolygon !== null);
   const stamp = useRunStamp(JSON.stringify([datasetInputsToken(active), mapRoi]));
   const statsStale = boxStats !== null && stamp.stale;
 
@@ -51,7 +53,7 @@ export function useBoxStats(active: Dataset | null, mapRoi: RoiRect | null): Box
   }, [active?.id]);
 
   async function runStats(): Promise<void> {
-    const problem = boxProblem(active, mapRoi);
+    const problem = boxProblem(active, mapRoi, polygonDrawn);
     if (problem || !active || !mapRoi) {
       setStatsError(problem ?? "Select a 2-D map dataset first.");
       return;

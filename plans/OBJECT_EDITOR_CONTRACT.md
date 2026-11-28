@@ -3,9 +3,9 @@
 The rules for making the double-click popup the only editor for an axis, a curve and the legend, so the right panel stops offering a second, differently behaving copy of the same fields.
 
 **Parent:** `ORIGIN_FEATURE_GAP_PLAN.md`, item 50 (owner decision OG23).
-**Status:** Active
+**Status:** Complete (2026-11-28, #1187, #1188, #1189, #1194). Kept while OG23 is on the revisit list: the code cites E1–E11, and the reversal ledger below is what a docked switch starts from.
 **Created:** 2026-11-27
-**Updated:** 2026-11-27
+**Updated:** 2026-11-28
 
 ## Context
 
@@ -129,3 +129,14 @@ Each row says what changed, where, and what reverses it. A full docked switch wo
 | PR | Change | File(s) | To reverse |
 |---|---|---|---|
 | #1186 | Contract and OG23 booked | `plans/` | Edit OG23 in the gap plan |
+| #1187 | Legend corner picker as a standalone value/onChange field (`LegendPositionField`) | `figuredialogs/LegendPositionField.tsx`, `LegendDialog.tsx` | Mount it in a panel card over `setLegendPos` |
+| #1187 | An outside click on an edited figure popup asks Discard / Keep editing (E6) | `figuredialogs/DiscardGuard.tsx`, `FigureDialogs.tsx` | Keep it while any popup stays; delete with the popups otherwise |
+| #1188 | Axis popup gains the title text (`AxisTitleField`, value/onChange), Y2 "Same as Y" scale and "Same format as Y", and X date / clock tick modes | `AxisDialog.tsx`, `AxisTitleField.tsx`, `lib/axisDialogModel.ts`, `lib/axisDialogParity.ts`, `lib/figureDialogActions.ts` | Mount `AxisTitleField` in a panel card over `setXAxisLabel` / `setYAxisLabel` / `setY2AxisLabel`; the panel's own `TickFormat` already covers the rest |
+| #1189 | Plot details becomes a tabbed curve editor over one draft (Line, Symbol, Error bars, Fill and bars, Marks); Apply folds into one undo step | `PlotDetailsDialog.tsx`, `figuredialogs/curve/*`, `store/commitCurveDraft.ts`, `Inspector/SeriesSymbolErrorControls.tsx` (optional `parts`) | Each tab takes `{channel, style, setSeriesStyle, ctx}`: a panel card mounts it with the live `setSeriesStyle` and `pickSeriesYError` |
+| #1194 | The switch: `OBJECT_EDITOR = "popup"` with the `objectEditorIsPopup()` accessor | `lib/objectEditorMode.ts` | Set it to `"panel"`: the one edit that restores the panel |
+| #1194 | Selection shows the name plus Edit… instead of the quick fields and legend controls | `Inspector/InspectorSelection.tsx` | `"panel"` brings back `AxisQuickFields`, `LegendControls` and the old hint |
+| #1194 | No card is hoisted for a curve or axis; Series style card not mounted | `Inspector/Inspector.tsx` | `"panel"` brings back the hoisting and the card |
+| #1194 | Axes card: X / Y / Y2 / Y3+ launchers instead of scale, limits and tick format; legend corner hidden | `Inspector/AxesCard.tsx`, `Inspector/LegendControls.tsx` (`corner` prop) | `"panel"` brings back the per-axis controls and the corner |
+| #1194 | Titles & labels card shows only the plot title | `Inspector/TitlesCard.tsx` | `"panel"` brings back the X, Y, Y2 rows |
+| #1194 | One legend-corner option list | `lib/legendPositions.ts` | Nothing; used in both modes |
+| #1194 | Panel-behaviour tests mock `"panel"`; six e2e specs drive the popups (`e2e/utils/objectPopup.ts`) | Inspector tests, `frontend/e2e/specs/*` | The mocked tests keep the panel path covered; the old e2e steps are in git history |

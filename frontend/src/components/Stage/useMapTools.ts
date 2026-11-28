@@ -16,6 +16,7 @@ import type { Dataset } from "../../lib/types";
 import { armExclusively, routedTool, type MapToolArming } from "./mapToolArming";
 import type { MapCutsState } from "./useMapCuts";
 import type { MapKeys } from "./useMapColumnPicks";
+import { useMapPolygon, type UseMapPolygonState } from "./useMapPolygon";
 import { useMapPickTool, type UseMapPickToolState } from "./useMapPickTool";
 import { useMapRoi, type UseMapRoiState } from "./useMapRoi";
 import { useMapRuler, type UseMapRulerState } from "./useMapRuler";
@@ -26,6 +27,7 @@ export interface MapTools extends MapToolArming {
   ruler: UseMapRulerState;
   wedge: UseMapSectorWedgeState;
   pick: UseMapPickToolState;
+  polygon: UseMapPolygonState;
   /** The one armed tool's drag routing, or null. */
   routed: ReturnType<typeof routedTool>;
   /** The Box can be drawn here: an RSM pair, or any plain map's own axes. */
@@ -46,12 +48,14 @@ export function useMapTools(
   const ruler = useMapRuler(active, cutSpace);
   const wedge = useMapSectorWedge(active, cutSpace);
   const pick = useMapPickTool(active?.data ?? null, mapActive?.data ?? null, keys);
+  const polygon = useMapPolygon(active, cutSpace, generic);
   const boxDrawable = cutSpace != null || generic != null;
   const routed = routedTool([
     { armed: roi.mode === "roi" && boxDrawable, ...roi },
     { armed: ruler.mode === "ruler" && cutSpace != null, ...ruler },
     { armed: wedge.mode === "sector" && cutSpace === "q", ...wedge },
     { armed: pick.mode === "pick", ...pick },
+    { armed: polygon.mode === "polygon" && boxDrawable, ...polygon },
   ]);
-  return { roi, ruler, wedge, pick, routed, boxDrawable, ...armExclusively(roi, ruler, wedge, cuts, pick) };
+  return { roi, ruler, wedge, pick, polygon, routed, boxDrawable, ...armExclusively(roi, ruler, wedge, cuts, pick, polygon) };
 }

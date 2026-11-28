@@ -16,7 +16,16 @@ import numpy as np
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, Field
 
-from quantized.calc import map_correlate, map_ops, math_area, math_interp, math_outputs, math_solve
+from quantized.calc import (
+    map_correlate,
+    map_ops,
+    math_area,
+    math_constrained,
+    math_interp,
+    math_outputs,
+    math_solve,
+    math_system,
+)
 from quantized.datastruct import DataStruct
 from quantized.routes._errors import CALC_ERRORS, call_calc
 from quantized.routes._offloop import OffloopJSONRoute
@@ -200,6 +209,9 @@ class CorrelateRequest(BaseModel):
     other: dict[str, Any]
     on_nan: Literal["error", "zero"] = "error"
     subpixel: bool = True
+    subtract_means: bool = True
+    normalize: Literal["global", "local"] = "global"
+    min_overlap: float = Field(default=0.25, gt=0.0, le=1.0)
 
 
 @router.post("/correlate", response_model=dict[str, Any], response_class=DataStructResponse)
@@ -208,8 +220,22 @@ def correlate(req: CorrelateRequest) -> Response:
     try:
         a = map_ops.read_grid(DataStruct.from_dict(req.dataset))
         b = map_ops.read_grid(DataStruct.from_dict(req.other))
-        g, peak = map_correlate.correlate_maps(a, b, on_nan=req.on_nan, subpixel=req.subpixel)
-        ds = math_outputs.correlation_datastruct(g, peak, {"on_nan": req.on_nan})
+        g, peak = map_correlate.correlate_maps(
+            a,
+            b,
+            on_nan=req.on_nan,
+            subpixel=req.subpixel,
+            subtract_means=req.subtract_means,
+            normalize=req.normalize,
+            min_overlap=req.min_overlap,
+        )
+        settings = {
+            "on_nan": req.on_nan,
+            "subtract_means": req.subtract_means,
+            "normalize": req.normalize,
+            "min_overlap": req.min_overlap,
+        }
+        ds = math_outputs.correlation_datastruct(g, peak, settings)
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return _out(ds)
@@ -271,3 +297,83 @@ def optimize(req: OptimizeRequest) -> OptimizeResponse:
         math_solve.optimize_box, req.expr, req.bounds, sense=req.sense, starts=req.starts
     )
     return OptimizeResponse(**asdict(res))
+
+
+class SystemRequest(BaseModel):
+    equations: list[str] = Field(max_length=12)
+    guess: dict[str, float]
+    constants: dict[str, float] = Field(default_factory=dict)
+    method: Literal["hybr", "lm"] = "hybr"
+
+
+class SystemResponse(BaseModel):
+    variables: list[str]
+    point: list[float]
+    residuals: list[float]
+    residual_norm: float
+    converged: bool
+    message: str
+    evaluations: int
+    method: str
+
+
+@router.post("/solve-system", response_model=SystemResponse)
+def solve_system(req: SystemRequest) -> SystemResponse:
+    """N equations in N unknowns (``scipy.optimize.root``)."""
+    res = call_calc(
+        math_system.solve_system, req.equations, req.guess, req.constants, method=req.method
+    )
+    return SystemResponse(**asdict(res))
+
+
+class ConstrainedRequest(BaseModel):
+    expr: str = Field(max_length=2000)
+    constraints: list[str] = Field(default_factory=list, max_length=24)
+    bounds: dict[str, tuple[float, float]] = Field(default_factory=dict)
+    guess: dict[str, float] = Field(default_factory=dict)
+    constants: dict[str, float] = Field(default_factory=dict)
+    sense: Literal["min", "max"] = "min"
+    method: Literal["SLSQP", "trust-constr"] = "SLSQP"
+    starts: int = Field(default=1, ge=1, le=200)
+
+
+class ConstraintStatusModel(BaseModel):
+    text: str
+    kind: str
+    value: float
+    slack: float | None
+    satisfied: bool
+    active: bool
+
+
+class ConstrainedResponse(BaseModel):
+    variables: list[str]
+    point: list[float]
+    value: float
+    sense: str
+    method: str
+    converged: bool
+    feasible: bool
+    max_violation: float
+    message: str
+    constraints: list[ConstraintStatusModel]
+    at_bound: list[str]
+    starts: int
+    starts_agreeing: int
+
+
+@router.post("/optimize-constrained", response_model=ConstrainedResponse)
+def optimize_constrained(req: ConstrainedRequest) -> ConstrainedResponse:
+    """Minimise / maximise under equality and inequality constraints."""
+    res = call_calc(
+        math_constrained.minimize_constrained,
+        req.expr,
+        req.constraints,
+        bounds=req.bounds,
+        guess=req.guess,
+        constants=req.constants,
+        sense=req.sense,
+        method=req.method,
+        starts=req.starts,
+    )
+    return ConstrainedResponse(**asdict(res))

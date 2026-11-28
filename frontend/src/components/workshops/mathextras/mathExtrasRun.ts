@@ -9,8 +9,9 @@ import {
 import type { DataStruct, Dataset } from "../../../lib/types";
 import { pickColumns, pickLabel, pickUnit, type PickColumn } from "../analysisextras/columnPicks";
 import {
-  finite, fmt, inputOf, parseBounds, parseConstants, parseQueries, parseSizing, type MathForm, type MathMode, type Parsed,
+  finite, fmt, inputOf, parseBounds, parseConstants, parseOverlap, parseQueries, parseSizing, type MathForm, type MathMode, type Parsed,
 } from "./mathExtrasForm";
+import { runConstrained, runSystem } from "./mathExtrasSolve";
 
 export interface Card {
   title: string;
@@ -116,8 +117,16 @@ async function runCorrelate(c: RunCtx): Promise<MathOutcome> {
   const a = await fullMap(c, c.active, "a 2-D map as the first map");
   const b = await fullMap(c, c.other, "a second 2-D map");
   if (a.id === b.id) throw new Error("Pick a second map that differs from the first.");
-  const onNan = c.form.blanksOk ? "zero" : "error";
-  const out = await correlateMaps(a.data, b.data, onNan, c.signal);
+  const f = c.form;
+  const onNan = f.blanksOk ? "zero" : "error";
+  // Only an option that differs from the default is sent; the defaults are the original behaviour.
+  const local = f.normalize === "local";
+  const minOverlap = local ? ok(parseOverlap(f.minOverlap)) : 0.25;
+  const opts = {
+    ...(f.subtractMeans ? {} : { subtract_means: false }),
+    ...(local ? { normalize: "local" as const, min_overlap: minOverlap } : {}),
+  };
+  const out = await correlateMaps(a.data, b.data, onNan, opts, c.signal);
   const peak = ((out.metadata?.["math_extras"] ?? {}) as { peak?: Record<string, number> }).peak ?? {};
   return {
     card: {
@@ -128,14 +137,18 @@ async function runCorrelate(c: RunCtx): Promise<MathOutcome> {
         ["Offset Y", fmt(peak["offset_y"]!)],
         ["Shift in cells", `${peak["lag_x"]}, ${peak["lag_y"]}`],
       ],
-      note: "Offset is what to add to the second map's coordinates to land it on the first.",
+      note: "Offset is what to add to the second map's coordinates to land it on the first."
+        + (f.subtractMeans ? "" : " Means were not removed (Origin's corr2).")
+        + (local ? ` Each offset is normalised over the cells valid in both maps; offsets overlapping fewer than ${fmt(minOverlap * 100)}% of the smaller map are blank.` : ""),
     },
-    output: { sources: [a, b], name: `${a.name} ⋆ ${b.name}`, data: out, settings: { mode: "correlate", on_nan: onNan, other: b.name } },
+    output: { sources: [a, b], name: `${a.name} ⋆ ${b.name}`, data: out, settings: { mode: "correlate", on_nan: onNan, other: b.name, subtract_means: f.subtractMeans, normalize: f.normalize, ...(local ? { min_overlap: minOverlap } : {}) } },
   };
 }
 
 async function runSolve(c: RunCtx): Promise<MathOutcome> {
   const f = c.form;
+  if (c.mode === "system") return { card: await runSystem(f, c.signal) };
+  if (c.mode === "constrained") return { card: await runConstrained(f, c.signal) };
   const expr = f.expr.trim();
   if (expr === "") throw new Error("Enter an expression, for example x^2 - a.");
   if (c.mode === "root") {

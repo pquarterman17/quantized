@@ -22,7 +22,7 @@
 // to trust uPlot's default auto-padding (empirically it pads the Y axis
 // asymmetrically, e.g. rendering "0..22" for a 0..20 data range, which shifts
 // data-value 10 well outside that tolerance). So every test below first pins
-// EXPLICIT X/Y limits [0, 20] via the Inspector's Axes card (AxisLimits.tsx —
+// EXPLICIT X/Y limits [0, 20] via the Axis popups (item 50; formerly AxisLimits.tsx —
 // the same UI path axis-title-limits.spec.ts drives) — a fixed `range` array
 // replaces uPlot's padding function entirely (see uplotOpts.ts), making the
 // data-to-pixel mapping exact.
@@ -31,6 +31,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { dropFileOnto } from "../utils/dnd";
 import { fixturePath } from "../utils/fixtures";
+import { applyPopup, openAxisPopup } from "../utils/objectPopup";
 import { gotoApp, waitForDatasetCount } from "../utils/harness";
 
 interface AnnotationSnapshot {
@@ -67,19 +68,16 @@ async function readSelectedAnnotationId(page: Page): Promise<string | null> {
   );
 }
 
-/** Pin explicit X/Y axis limits [0, 20] via the Inspector's Axes card so the
- *  data-to-pixel mapping is exact (see the module doc) — the same
- *  AxisLimits.tsx fields axis-title-limits.spec.ts drives, in field order
- *  [xMin, xMax, yMin, yMax] (AxisLimits.tsx's `row()` calls, X then Y). */
+/** Pin explicit X/Y axis limits [0, 20] through the Axis popups (item 50:
+ *  the popup is the only axis editor) so the data-to-pixel mapping is exact
+ *  (see the module doc). */
 async function pinAxisLimits(page: Page): Promise<void> {
-  const axesCard = page.locator(".qz-card").filter({ has: page.locator("summary", { hasText: "Axes" }) });
-  await axesCard.locator("summary").click();
-  const fields = axesCard.getByPlaceholder("auto");
-  await fields.nth(0).fill("0");
-  await fields.nth(1).fill("20");
-  await fields.nth(2).fill("0");
-  await fields.nth(3).fill("20");
-  await fields.nth(3).blur();
+  for (const axis of ["X", "Y"] as const) {
+    const dialog = await openAxisPopup(page, axis);
+    await dialog.getByRole("textbox", { name: `${axis} axis From`, exact: true }).fill("0");
+    await dialog.getByRole("textbox", { name: `${axis} axis To`, exact: true }).fill("20");
+    await applyPopup(dialog);
+  }
   await expect
     .poll(() =>
       page.evaluate(

@@ -14,10 +14,12 @@
 import type { FigureDocument } from "../lib/figureDocument";
 import type { FigureDoc } from "../lib/figuredoc";
 import type { MapViewMap, MapViewState } from "../lib/mapView";
+import type { NamedRange } from "../lib/namedRanges";
 import type { Dataset } from "../lib/types";
 import { deriveWorkbooks, type WorkbookNode } from "../lib/workbooks";
 import { trashEntryId, type DatasetTrashEntry, type FolderTrashMember, type RestoreResult, type TrashEntry } from "./trash";
 import type { AppState } from "./useApp";
+import { restoreNamedRanges } from "./trashNamedRanges";
 import { nextWorkbookId } from "./workbookIds";
 
 /** Shared by the standalone `dataset`-kind restore AND the dependency-aware
@@ -39,12 +41,17 @@ export function restoreDatasetInto(
    *  sat in the trash (a re-import, an undo) WINS — this never overwrites a
    *  view the live store already has for that id. */
   mapView?: MapViewState,
+  /** The named ranges captured with it (`DatasetTrashEntry.namedRanges`): back under their own ids (store/trashNamedRanges.ts). */
+  namedRanges?: readonly NamedRange[],
 ): {
   dataset: Dataset;
   datasets: Dataset[];
   workbooks: WorkbookNode[];
   expandedWorkbookIds: string[];
   mapViews: MapViewMap;
+  namedRanges: NamedRange[];
+  /** What the restore says about the named ranges, if the sheet had any. */
+  rangeNote?: string;
 } {
   let restored = dataset;
   let workbooks = s.workbooks;
@@ -66,7 +73,9 @@ export function restoreDatasetInto(
   }
   const mapViews =
     mapView && !(dataset.id in s.mapViews) ? { ...s.mapViews, [dataset.id]: mapView } : s.mapViews;
-  return { dataset: restored, datasets: [...s.datasets, restored], workbooks, expandedWorkbookIds, mapViews };
+  const allDatasets = [...s.datasets, restored];
+  const ranges = restoreNamedRanges(s.namedRanges, namedRanges, restored, allDatasets, workbooks);
+  return { dataset: restored, datasets: allDatasets, workbooks, expandedWorkbookIds, mapViews, namedRanges: ranges.namedRanges, rangeNote: ranges.note };
 }
 
 /** Restoring a live-mode `editableFigure`/`figureDoc` whose bound dataset is
@@ -91,7 +100,7 @@ function resolveDatasetDependency<T>(
     (e): e is DatasetTrashEntry => e.kind === "dataset" && e.dataset.id === boundDatasetId,
   );
   if (dsEntry) {
-    const r = restoreDatasetInto(s, dsEntry.dataset, dsEntry.mapView);
+    const r = restoreDatasetInto(s, dsEntry.dataset, dsEntry.mapView, dsEntry.namedRanges);
     return {
       restored: payload,
       extraPatch: {
@@ -99,9 +108,10 @@ function resolveDatasetDependency<T>(
         workbooks: r.workbooks,
         expandedWorkbookIds: r.expandedWorkbookIds,
         mapViews: r.mapViews,
+        ...(r.namedRanges !== s.namedRanges ? { namedRanges: r.namedRanges } : {}),
       },
       consumedEntryIds: [trashEntryId(dsEntry)],
-      note: `restored with its dataset "${r.dataset.name}"`,
+      note: `restored with its dataset "${r.dataset.name}"${r.rangeNote ? `; ${r.rangeNote}` : ""}`,
     };
   }
   return {
@@ -143,20 +153,21 @@ export function computeRestore(
       if (s.datasets.some((d) => d.id === entry.dataset.id)) {
         return { patch: { trash: withoutEntry() }, result: { ok: true } };
       }
-      const r = restoreDatasetInto(s, entry.dataset, entry.mapView);
+      const r = restoreDatasetInto(s, entry.dataset, entry.mapView, entry.namedRanges);
       return {
         patch: {
           datasets: r.datasets,
           workbooks: r.workbooks,
           expandedWorkbookIds: r.expandedWorkbookIds,
           mapViews: r.mapViews,
+          ...(r.namedRanges !== s.namedRanges ? { namedRanges: r.namedRanges } : {}),
           trash: withoutEntry(),
           activeId: s.activeId ?? entry.dataset.id,
           // L0.25 coherence: a restore that IS an activation (nothing was
           // active) yields the tree selection, like every other activation path.
           ...(s.activeId == null ? { librarySelection: null } : {}),
         },
-        result: { ok: true },
+        result: { ok: true, ...(r.rangeNote ? { note: r.rangeNote } : {}) },
       };
     }
     case "editableFigure": {
