@@ -236,8 +236,27 @@ function restoreFocusTo(cameFrom: HTMLElement | null, root: HTMLElement | null):
   // A menu-launched dialog's opener is the menu item, unmounted with the menu:
   // fall back to the trigger that menu was opened from (`qzMenuReturn`, set by ContextMenu).
   const target = cameFrom?.isConnected ? cameFrom : (cameFrom as (HTMLElement & { qzMenuReturn?: HTMLElement }) | null)?.qzMenuReturn;
+  swallowEnterActivation();
   if (target?.isConnected) target.focus();
   else focusSafeLanding();
+}
+
+/** A dialog that closes on an Enter KEYDOWN hands focus back to its opener before the browser has
+ *  dispatched that Enter's keypress; the keypress default then clicks the button that now has focus
+ *  and reopens the dialog (acceptance pass 13, B2). While an Enter is down and its keypress has not
+ *  been seen, cancel that one keypress when focus is restored. A close from a click, Escape, or after
+ *  the keypress is untouched. */
+let enterAwaitingKeypress = false;
+if (typeof document !== "undefined") {
+  document.addEventListener("keydown", (e) => { enterAwaitingKeypress = e.key === "Enter"; }, true);
+  document.addEventListener("keypress", () => { enterAwaitingKeypress = false; }, true);
+  document.addEventListener("keyup", () => { enterAwaitingKeypress = false; }, true);
+}
+function swallowEnterActivation(): void {
+  if (!enterAwaitingKeypress) return;
+  const stop = (e: Event) => e.preventDefault();
+  document.addEventListener("keypress", stop, { capture: true, once: true });
+  setTimeout(() => document.removeEventListener("keypress", stop, true), 0);
 }
 
 // `useOpenerCapture` (render-time opener read) lives in the leaf
