@@ -266,6 +266,7 @@ export function parseWorkspaceDataset(
   if (frozenCols) ds.frozenCols = frozenCols;
   const cellRules = sanitizeCellRules(dd.cellRules, ds.data.labels.length);
   if (cellRules) ds.cellRules = cellRules;
+  if (dd.protectedSheet === true) ds.protectedSheet = true; // sheet protection (lib/sheetProtection.ts)
   // Row exclusions (#50): clamp to the loaded row count — a hand-edited or
   // stale .dwk could carry out-of-range indices.
   const excluded = sanitizeExcluded(dd.excludedRows, ds.data.time.length);

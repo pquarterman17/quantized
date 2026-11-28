@@ -14,6 +14,7 @@ import { is2DMap } from "./mapdata";
 import { multiSelected } from "./multiSelected";
 import { plotInNewWindow } from "./plotInNewWindow";
 import { plotSelectedTogether } from "./plotSelectedTogether";
+import { datasetSourceRowsActions } from "./sourceRowsAction";
 import { canAutoUpdate, readSourceNow, toggleAutoUpdate, watchedIds } from "./sourceWatchMenu";
 import { useAnalysisExtras } from "../store/analysisExtras";
 import { useApp } from "../store/useApp";
@@ -221,6 +222,7 @@ export { datasetRemoveActions } from "./datasetRemoveActions";
 /** Every dataset action, flat — for callers that don't care about layout. */
 export const datasetActions: ContextAction<DatasetActionTarget>[] = [
   ...datasetCoreActions,
+  ...datasetSourceRowsActions,
   datasetNewFolderAction,
   ...datasetCorrectionsActions,
   ...datasetMultiSelectActions,

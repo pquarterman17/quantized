@@ -42,6 +42,7 @@ from ..datastruct import DataStruct
 from .column_formula_complex import REAL_PART_FUNCS, SOURCES, make_ops
 from .column_formula_dist import DIST_FUNCS
 from .column_formula_extra import EXTRA_FUNCS
+from .column_formula_signal import WHOLE_COLUMN_FUNCS, whole_call
 
 __all__ = [
     "add_formula_columns",
@@ -357,6 +358,10 @@ def _compile(src: str) -> tuple[Fn, list[str]]:
         return base
 
     def call(name: str) -> Fn:
+        nonlocal pos
+        if name in WHOLE_COLUMN_FUNCS:  # a whole column in, one out: column_formula_signal.py
+            fn, pos = whole_call(name, toks, pos, refs)
+            return fn
         if name not in _FUNCS and name not in SOURCES:
             raise ValueError(f'the function "{name}" is evaluated only in the app')
         nxt = toks[pos + 1] if pos + 1 < len(toks) else None

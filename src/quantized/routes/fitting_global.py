@@ -39,8 +39,16 @@ from quantized.calc.global_curve_fit import (
     share_groups,
     slot_layout,
 )
+from quantized.calc.global_multi_model import (
+    MemberModel,
+    global_fit_models,
+    joint_statistics,
+    union_names,
+    validate_constraints,
+)
 from quantized.jobs import AbortFn, JobCancelled, JobQueueFullError, ProgressFn, jobs
 from quantized.routes._errors import CALC_ERRORS
+from quantized.routes._global_members import resolve_member
 from quantized.routes._offloop import OffloopJSONRoute
 from quantized.routes._payload import to_jsonable
 
@@ -64,9 +72,26 @@ class ShareGroup(BaseModel):
     datasets: list[int]
 
 
+class DatasetModelSpec(BaseModel):
+    """One dataset's own model (multi-output fits). Start, bounds and holds are in
+    the order of THIS model's parameters; a null start is auto-guessed from the data."""
+
+    model: str | None = None
+    equation: str | None = None
+    p0: list[float] | None = None
+    lower: list[float | None] | None = None
+    upper: list[float | None] | None = None
+    fixed: list[bool] | None = None
+
+
 class GlobalFitRequest(BaseModel):
     model: str | None = None
     equation: str | None = None
+    # Multi-output models: one model per dataset (same length as ``datasets``),
+    # instead of model / equation / p0 / lower / upper / fixed. A parameter is
+    # shared only when ``constraints`` names it; the same name in two models is
+    # otherwise two independent parameters.
+    dataset_models: list[DatasetModelSpec] | None = None
     datasets: list[GlobalSeries]
     constraints: list[ShareGroup] = []
     # One start vector (broadcast to every dataset) or one per dataset.
@@ -86,6 +111,7 @@ class GlobalFitRequest(BaseModel):
 
 @dataclass
 class _Problem:
+    members: list[MemberModel] | None
     fcn: ModelFn
     names: list[str]
     series: list[tuple[list[float], list[float]]]
@@ -121,6 +147,8 @@ def _held_rows(fixed: list[list[bool]] | list[bool] | None, k: int, n: int) -> l
 
 def _prepare(req: GlobalFitRequest) -> _Problem:
     """Validate the request and resolve the model -> a calc-ready problem."""
+    if req.dataset_models is not None:
+        return _prepare_multi(req)
     if (req.model is None) == (req.equation is None):
         raise ValueError("specify exactly one of model or equation")
     if not req.datasets:
@@ -178,6 +206,7 @@ def _prepare(req: GlobalFitRequest) -> _Problem:
         weights = [None if s.dy is None else weights_from_dy(s.dy, len(s.x)) for s in req.datasets]
 
     return _Problem(
+        members=None,
         fcn=fcn,
         names=names,
         series=[(s.x, s.y) for s in req.datasets],
@@ -192,18 +221,56 @@ def _prepare(req: GlobalFitRequest) -> _Problem:
     )
 
 
+def _prepare_multi(req: GlobalFitRequest) -> _Problem:
+    """Per-dataset models: one ``MemberModel`` per dataset (``calc.global_multi_model``)."""
+    assert req.dataset_models is not None
+    if (req.model is not None or req.equation is not None or req.p0 is not None
+            or req.lower is not None or req.upper is not None or req.fixed is not None):
+        raise ValueError("with dataset_models give the model, start, bounds and holds "
+                         "per dataset, not at the top level")
+    if not req.datasets:
+        raise ValueError("need at least one dataset")
+    if len(req.dataset_models) != len(req.datasets):
+        raise ValueError(f"dataset_models needs one entry per dataset: {len(req.datasets)} "
+                         f"datasets, {len(req.dataset_models)} models")
+    for i, s in enumerate(req.datasets):
+        if len(s.x) != len(s.y):
+            raise ValueError(f"dataset {i}: x and y must be the same length")
+        if not s.x:
+            raise ValueError(f"dataset {i} has no points")
+    members = [resolve_member(i, spec, s.x, s.y)
+               for i, (spec, s) in enumerate(zip(req.dataset_models, req.datasets, strict=True))]
+    constraints = [{"param_name": c.param_name, "datasets": c.datasets} for c in req.constraints]
+    validate_constraints(members, constraints)
+    weights: list[Any] | None = None
+    if any(s.dy is not None for s in req.datasets):
+        weights = [None if s.dy is None else weights_from_dy(s.dy, len(s.x)) for s in req.datasets]
+    return _Problem(
+        members=members, fcn=members[0].fcn, names=union_names(members),
+        series=[(s.x, s.y) for s in req.datasets], constraints=constraints,
+        p0=[], lower=None, upper=None, weights=weights, fixed=None,
+        covariance=req.covariance, max_iter=req.max_iter,
+    )
+
+
 def _solve(
     prob: _Problem,
     progress: ProgressFn | None = None,
     abort_check: AbortFn | None = None,
 ) -> dict[str, Any]:
+    if prob.members is not None:
+        fit = global_fit_models(
+            list(prob.series), prob.members, prob.constraints, weights=prob.weights,
+            covariance=prob.covariance, max_iter=prob.max_iter,
+            progress_callback=progress, abort_check=abort_check)
+        return to_jsonable({**fit, **joint_statistics(fit, prob.weights)})  # type: ignore[no-any-return]
     result = global_curve_fit(
         list(prob.series), prob.fcn, prob.names, prob.constraints,
         init_guess=prob.p0, lower=prob.lower, upper=prob.upper, weights=prob.weights,
         fixed=prob.fixed, covariance=prob.covariance, max_iter=prob.max_iter,
         progress_callback=progress, abort_check=abort_check,
     )
-    out: dict[str, Any] = to_jsonable(result)
+    out: dict[str, Any] = to_jsonable({**result, **joint_statistics(result, prob.weights)})
     out["paramNames"] = prob.names
     return out
 
@@ -214,8 +281,9 @@ def _checked(req: GlobalFitRequest) -> _Problem:
     its datasets), so both routes 422 before any fitting starts."""
     try:
         prob = _prepare(req)
-        groups = share_groups(prob.constraints, prob.names, len(prob.series))
-        _check_held(prob, groups)
+        if prob.members is None:
+            groups = share_groups(prob.constraints, prob.names, len(prob.series))
+            _check_held(prob, groups)
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return prob
@@ -291,6 +359,11 @@ def _checked_compare(req: GlobalFitRequest) -> _Problem:
     """``_checked`` plus the compare-specific rules (>= 2 datasets, a named
     shared parameter), so both routes 422 before any fitting starts."""
     prob = _checked(req)
+    if prob.members is not None:
+        raise HTTPException(
+            status_code=422,
+            detail="compare datasets tests one model on every dataset; "
+                   "it cannot compare datasets that have different models")
     if len(prob.series) < 2:
         raise HTTPException(status_code=422, detail="compare datasets needs at least two datasets")
     given = [s.dy is not None for s in req.datasets]

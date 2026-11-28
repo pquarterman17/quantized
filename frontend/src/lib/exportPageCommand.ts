@@ -29,7 +29,9 @@ import { spatialPanelsOf } from "./composition";
 import { cancelled, type StoreGet } from "./exportActive";
 import { GREYSCALE_FIELD } from "./exportFigureCommand";
 import { canvasLineWidth } from "./plotTemplates";
+import { rowRangeRefusal } from "./rowRange";
 import { analysisData } from "./rowstate";
+import { windowedDataset } from "./rowWindowDataset";
 import { chooseExcludedRows, pageExcludedChoiceMatters } from "./excludedRowsChoice";
 import type { ExcludedRowsGhoster } from "./figureSpec";
 import { buildSpatialPageRequest, canExportSpatialPage, withSpatialGhosts } from "./spatialPageExport";
@@ -102,7 +104,21 @@ export async function runExportSpatialPageCommand(s: StoreGet): Promise<void> {
       return;
     }
     const missing = entries.some((e) => e === null);
-    const full = new Map(entries.filter((e): e is readonly [string, Dataset] => e !== null));
+    const live0 = s();
+    // The plot's row window, for the panels of THIS sheet (a panel of another sheet has no rows the window can name,
+    // so it exports every row, as the grid draws it). A window that cannot be applied refuses, as every figure export.
+    const rowWindow = live0.rowRange;
+    if (rowWindow && live0.activeId && panels!.some((p) => p.datasetId === live0.activeId)) {
+      const mine = entries.find((e) => e?.[0] === live0.activeId)?.[1];
+      const refusal = mine && !mine.pending ? rowRangeRefusal(rowWindow, mine.data.time.length) : null;
+      if (refusal) {
+        const msg = `export page: plot row range: ${refusal}`;
+        s().setStatus(msg);
+        toast(msg, "danger");
+        return;
+      }
+    }
+    const full = new Map(entries.filter((e): e is readonly [string, Dataset] => e !== null).map(([id, ds]) => [id, id === live0.activeId ? windowedDataset(ds, rowWindow) : ds] as const));
     const datasets = new Map([...full].map(([id, ds]) => [id, analysisData(ds) ?? ds.data] as const));
     const live = s();
     const build = (greyExcluded?: ExcludedRowsGhoster): FigurePageSpec | null =>

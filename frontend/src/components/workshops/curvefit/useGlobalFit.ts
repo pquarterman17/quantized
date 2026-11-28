@@ -34,7 +34,7 @@ import {
   type GlobalFitResult,
 } from "../../../lib/api/globalFit";
 import { reportEmit } from "../../../lib/api/report";
-import { boundsForWire, parseFitParams, rowsFromModel, type FitParamRow } from "../../../lib/fitParams";
+import { boundsForWire, parseFitParams, rowsForModel, rowsFromModel, type FitParamRow } from "../../../lib/fitParams";
 import { fmtNum } from "../../../lib/format";
 import { cancelJob, JobCancelledError, pollJob } from "../../../lib/jobs";
 import { effectiveChannels } from "../../../lib/plotdata";
@@ -60,6 +60,7 @@ import {
   type GlobalSource,
 } from "./globalFitData";
 import { takeBackOverlay } from "./fitOverlayOwnership";
+import { isMultiModel, memberSpec, modelOfMember, unionModel } from "./globalMemberModels";
 
 /** The model to fit: a registry model, or a saved equation (`equation` set). */
 export type GlobalModel = Pick<FitModel, "name" | "paramNames" | "p0" | "lb" | "ub"> & { equation?: string };
@@ -81,6 +82,11 @@ export interface GlobalFitState {
   togglePick: (key: string) => void;
   rows: FitParamRow[];
   setRow: (i: number, patch: Partial<FitParamRow>) => void;
+  /** Per picked series, the registry model it is fitted with (key: memberKey); absent = the main model. */
+  memberModels: Record<string, string>;
+  setMemberModel: (key: string, name: string) => void;
+  /** Some series use another model than the main one: the table lists every model's parameters. */
+  multi: boolean;
   shared: boolean[];
   setShared: (i: number, v: boolean) => void;
   busy: boolean;
@@ -105,7 +111,7 @@ export interface GlobalFitState {
   toReport: () => Promise<void>;
 }
 
-export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
+export function useGlobalFit(baseModel: GlobalModel | null, catalog: readonly FitModel[] = []): GlobalFitState {
   const active = useActiveDataset();
   const datasets = useApp((s) => s.datasets);
   const xKey = useApp((s) => s.xKey);
@@ -117,7 +123,9 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
   const setActive = useApp((s) => s.setActive);
   const [source, setSourceState] = useState<GlobalSource>("channels");
   const [picked, setPicked] = useState<string[] | null>(null);
-  const [rows, setRows] = useState<FitParamRow[]>(() => rowsFromModel(model as FitModel | undefined));
+  const [rows, setRows] = useState<FitParamRow[]>(() => rowsFromModel(baseModel as FitModel | undefined));
+  const [memberModels, setMemberModels] = useState<Record<string, string>>({});
+  const prevModel = useRef<{ base: string; model: GlobalModel | null } | null>(null);
   const [shared, setSharedFlags] = useState<boolean[]>([]);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
@@ -131,17 +139,6 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
   const [reporting, setReporting] = useState(false);
   const jobRef = useRef<string | null>(null);
   const ownOverlay = useRef<FitOverlay | null>(null);
-
-  // A new model re-seeds the table, forgets the flags (names changed) and
-  // drops the previous model's result and curve.
-  const modelKey = model ? `${model.name}|${model.equation ?? ""}` : "";
-  useEffect(() => {
-    setRows(rowsFromModel(model as FitModel | undefined));
-    setSharedFlags([]);
-    setResult(null);
-    setComparison(null);
-    takeBackOverlay(ownOverlay.current);
-  }, [modelKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const primaryY = useMemo(() => {
     const channel = active ? fitChannelOf(active, xKey, yKeys, seriesOrder) : null;
@@ -167,6 +164,38 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
   }, [active, candidates, source, xKey, yKeys, seriesOrder, selectedIds]);
   const pickedKeys = picked ?? defaultPick;
 
+  // The model each picked series is fitted with. When any series takes another
+  // model than the main one, the table is the UNION of their parameters.
+  const pickKey = pickedKeys.join(",");
+  const modelList = useMemo(
+    () => (baseModel ? candidates.filter((m) => pickedKeys.includes(memberKey(m))).map((m) => modelOfMember(memberModels[memberKey(m)], baseModel, catalog)) : []),
+    [baseModel, candidates, pickKey, memberModels, catalog], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const multi = isMultiModel(modelList);
+  const model = useMemo(() => (baseModel && multi ? unionModel(modelList) : baseModel), [baseModel, multi, modelList]);
+  const assignKey = pickedKeys.map((k) => memberModels[k] ?? "").join(","); // the picks, not the candidates: "Show" can move the active dataset
+
+  // A new MAIN model re-seeds the table, forgets the flags (names changed) and
+  // drops the previous model's result and curve. A change of a series' own model
+  // keeps the edits and ticks of the parameters that survive by name.
+  const modelKey = model ? `${model.name}|${model.equation ?? ""}|${model.paramNames.join(",")}` : "";
+  useEffect(() => {
+    const baseKey = baseModel ? `${baseModel.name}|${baseModel.equation ?? ""}` : "";
+    const before = prevModel.current;
+    prevModel.current = { base: baseKey, model };
+    if (before?.model && model && before.base === baseKey) {
+      const was = before.model;
+      setRows((r) => rowsForModel(model as FitModel, r, was as FitModel));
+      setSharedFlags((f) => model.paramNames.map((n) => f[was.paramNames.indexOf(n)] ?? false));
+    } else {
+      setRows(rowsFromModel(model as FitModel | undefined));
+      setSharedFlags([]);
+    }
+    setResult(null);
+    setComparison(null);
+    takeBackOverlay(ownOverlay.current);
+  }, [modelKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // A verdict describes the picks, ticks and start/bound table it was run with:
   // changing any of them (or the source) drops it rather than leaving it up; a
   // fit result is marked out of date by the same key. Beyond the form it depends on the model, the X channel and the
@@ -177,7 +206,7 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
   // and the X channel only where it defines the members: with datasets, "Show"
   // activates another dataset, which must not count as an edit.
   const ticks = model ? model.paramNames.map((_, j) => (shared[j] ? 1 : 0)).join("") : "";
-  const freshKey = `${source}|${pickedKeys.join(",")}|${ticks}|${JSON.stringify(rows)}|${modelKey}|${source === "channels" ? xKey : ""}|${dataKey}`;
+  const freshKey = `${source}|${pickedKeys.join(",")}|${ticks}|${JSON.stringify(rows)}|${modelKey}|${assignKey}|${source === "channels" ? xKey : ""}|${dataKey}`;
   const stamp = useRunStamp(freshKey);
   const stale = result !== null && stamp.stale;
   useEffect(() => setComparison(null), [freshKey]);
@@ -239,9 +268,12 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
       if (hadPending) await afterCommit();
       const launchKey = stamp.launchKey();
       const base = rowsFromModel(model as FitModel);
-      const startsEdited = rows.some((r, i) => r.start !== base[i]?.start);
+      const edited = rows.map((r, i) => r.start !== base[i]?.start);
+      const startsEdited = edited.some(Boolean);
       const req: GlobalFitRequest = {
-        ...(model.equation ? { equation: model.equation } : { model: model.name }),
+        ...(multi
+          ? { dataset_models: modelList.map((m) => memberSpec(m, model, parsed, edited, startsEdited)) }
+          : model.equation ? { equation: model.equation } : { model: model.name }),
         datasets: data.map(({ d }) => ({ x: d.x, y: d.y })),
         // Compare tests the ticked parameters; none ticked tests them all.
         constraints: shareConstraints(
@@ -249,9 +281,8 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
           mode === "compare" && !shared.some(Boolean) ? model.paramNames.map(() => true) : shared,
           members.length,
         ),
-        ...(startsEdited ? { p0: parsed.p0 } : {}),
-        lower: boundsForWire(parsed.lower),
-        upper: boundsForWire(parsed.upper),
+        ...(!multi && startsEdited ? { p0: parsed.p0 } : {}),
+        ...(multi ? {} : { lower: boundsForWire(parsed.lower), upper: boundsForWire(parsed.upper) }),
       };
       const { job_id } = await (mode === "compare" ? compareDatasetsJob(req) : globalFitJob(req));
       jobRef.current = job_id;
@@ -320,7 +351,7 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
         kind: "stats_table",
         records: reportRecords(fit, members),
         title,
-        caption: `${members.length} series; shared: ${sharedNames.join(", ") || "none"}; reduced χ² = ${fmtNum(fit.chiSqRed)}`,
+        caption: `${members.length} series${fit.datasetModels ? ` (models: ${fit.datasetModels.join(", ")})` : ""}; shared: ${sharedNames.join(", ") || "none"}; reduced χ² = ${fmtNum(fit.chiSqRed)}; AIC = ${fmtNum(fit.AIC)}; BIC = ${fmtNum(fit.BIC)}`,
         source_refs: refs,
       });
       addReportWithProvenance(title, report, activeId);
@@ -343,6 +374,9 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
     togglePick: (key) =>
       setPicked(pickedKeys.includes(key) ? pickedKeys.filter((k) => k !== key) : [...pickedKeys, key]),
     rows,
+    memberModels,
+    setMemberModel: (key, name) => setMemberModels((cur) => ({ ...cur, [key]: name })),
+    multi,
     setRow: (i, patch) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r))),
     shared,
     setShared: (i, v) =>

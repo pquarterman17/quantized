@@ -29,6 +29,7 @@ import {
 } from "../../lib/datasetContextActions";
 import { datasetCombineSeparateActions } from "../../lib/combineSeparateActions";
 import { datasetDerivedWorksheetActions } from "../../lib/derivedWorksheetActions";
+import { datasetSourceRowsActions } from "../../lib/sourceRowsAction";
 import { datasetMetaFactorsAction } from "../../lib/metaFactorsAction";
 import { withQuickPlot } from "../../lib/quickPlotActions";
 import type { WorkbookLibraryNode } from "../../lib/libraryHierarchy";
@@ -133,6 +134,7 @@ export function buildDatasetRowMenu(
       ...submenuItem("Open", joinGroups(
         pick(["dataset.openMap", "dataset.openWorksheetWindow", "dataset.techniqueWorkspace"]),
         pick(["dataset.configureQuickPlot", "dataset.quickPlotWith"]),
+        buildMenuItems(datasetSourceRowsActions, target), // a linked subset: back to its source rows
         wb?.focus ?? [],
       )),
     ],

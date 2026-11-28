@@ -21,16 +21,18 @@ import { recalcNodes, wouldCreateCycle } from "../lib/recalc";
 import type { DerivedSpec, SheetBinding } from "../lib/formulaTypes";
 import type { ComputedColumn, DataStruct, Dataset } from "../lib/types";
 import { LINKED_GRAPH_EDIT_NOTICE } from "../lib/rederived";
+import { PROTECTED_NOTICE } from "../lib/sheetProtection";
 import { resolvePendingEdit } from "./pendingEdit";
 import { createRemoveFormulaProxy } from "./removeFormulaLazy";
 import { failWithRetry } from "./toasts";
 import type { AppState } from "./useApp";
 
 /** A live graph's sheet is rebuilt from its sources, so a formula column added
- *  or edited on it would be silently dropped at the next rebuild (lib/rederived.ts). */
+ *  or edited on it would be silently dropped at the next rebuild (lib/rederived.ts);
+ *  a protected sheet (lib/sheetProtection.ts) refuses the same writes. */
 export function refuseLinkedGraph(get: () => AppState, ds: Dataset): boolean {
-  if (ds.linkedCurves == null) return false;
-  get().setStatus(LINKED_GRAPH_EDIT_NOTICE);
+  if (ds.linkedCurves == null && !ds.protectedSheet) return false;
+  get().setStatus(ds.protectedSheet ? PROTECTED_NOTICE : LINKED_GRAPH_EDIT_NOTICE);
   return true;
 }
 

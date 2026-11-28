@@ -45,6 +45,16 @@ export interface GlobalFitResult {
   exitFlag: number;
   /** Why exitFlag is 0, when the fitter can say (e.g. a stalled parameter). */
   warnings?: string[];
+  /** Joint fit: weighted residual sum of squares over every series, and the
+   *  information criteria of calc.fit_metrics (one convention for every fitter). */
+  chiSqTotal?: Num;
+  AIC?: Num;
+  AICc?: Num;
+  BIC?: Num;
+  /** Per-series models only: each series' own parameter names (a name a series'
+   *  model lacks is null in `params` / `errors`) and the model it was fitted with. */
+  datasetParamNames?: string[][];
+  datasetModels?: string[];
 }
 
 /** Queue a global fit; answers { job_id } at once. */

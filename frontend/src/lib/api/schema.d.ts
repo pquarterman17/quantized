@@ -10777,6 +10777,25 @@ export interface components {
             /** Dataset Handle */
             dataset_handle: string | null;
         };
+        /**
+         * DatasetModelSpec
+         * @description One dataset's own model (multi-output fits). Start, bounds and holds are in
+         *     the order of THIS model's parameters; a null start is auto-guessed from the data.
+         */
+        DatasetModelSpec: {
+            /** Equation */
+            equation?: string | null;
+            /** Fixed */
+            fixed?: boolean[] | null;
+            /** Lower */
+            lower?: (number | null)[] | null;
+            /** Model */
+            model?: string | null;
+            /** P0 */
+            p0?: number[] | null;
+            /** Upper */
+            upper?: (number | null)[] | null;
+        };
         /** DatasetPatchRequest */
         DatasetPatchRequest: {
             /** Dataset Handle */
@@ -12558,6 +12577,8 @@ export interface components {
              * @enum {string}
              */
             covariance?: "jtj" | "hessian";
+            /** Dataset Models */
+            dataset_models?: components["schemas"]["DatasetModelSpec"][] | null;
             /** Datasets */
             datasets: components["schemas"]["GlobalSeries"][];
             /** Equation */

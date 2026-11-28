@@ -22,6 +22,7 @@ import { LINKED_GRAPH_EDIT_NOTICE } from "../lib/rederived";
 import type { ComputedColumn, Dataset } from "../lib/types";
 import { formulaLetter, linkSheets, withRecomputedFormulas } from "./computedColumns";
 import type { HistoryBatchToken } from "./history";
+import { PROTECTED_NOTICE } from "../lib/sheetProtection";
 import { withResolved } from "./pendingEdit";
 import { useApp } from "./useApp";
 import { syncDatasetWindowDocuments } from "./windowDocuments";
@@ -97,6 +98,7 @@ export async function addDerivedColumn(
   const out = await withResolved(get, id, "adding a column", (ds): DerivedColumnResult => {
     // A live graph's sheet is rebuilt from its sources: the column would be lost.
     if (ds.linkedCurves) return { ok: false, error: LINKED_GRAPH_EDIT_NOTICE };
+    if (ds.protectedSheet) return { ok: false, error: PROTECTED_NOTICE };
     const a = analyse(ds, req);
     if (!a.ok) return a;
     const { columns, step } = a;

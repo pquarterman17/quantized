@@ -14,12 +14,12 @@ import { describeExtract, type ExtractPlan } from "./extractRows";
 /** Commit the extract. The child records which source rows it holds (`__quantized_source_rows`, ROW_RANGE_CONTRACT
  *  section 4), so Go to Source finds them after the source is sorted, grown or shrunk; above the cap it is
  *  unlinked and the status says so. `quiet`: add beside the source without activating it (a plot's "Create
- *  subset from region" keeps the graph in focus); `onAdded` gets the new worksheet's id.
+ *  subset from region" keeps the graph in focus); `patch`: where it lands (its workbook); `onAdded` gets the new worksheet's id.
  *  Null: a new worksheet was added (the caller reports it); else the status to show instead (refused, already
  *  in the Library, or added without its row link). */
 export function commitExtract(
   source: Dataset, plan: ExtractPlan, nameOf: (datasetId: string) => string | undefined,
-  options: { quiet?: boolean; onAdded?: (outputId: string) => void } = {},
+  options: { quiet?: boolean; onAdded?: (outputId: string) => void; patch?: Partial<Dataset> } = {},
 ): { status: string; tone: "danger" | "ok" } | null {
   const linkPlan = planSourceLink(source, plan.rows);
   const data = stampSourceLink(plan.data, linkPlan.kind === "linked" ? linkPlan.link : null);
@@ -30,6 +30,7 @@ export function commitExtract(
     settings: { rows: plan.data.time.length, of: source.data.time.length },
     xKey: null, // the rows are cut along the worksheet's own X
     name, data, ...(options.quiet ? { quiet: true } : {}),
+    ...(options.patch ? { patch: options.patch } : {}),
   });
   if (outcome.kind === "refused") return { status: outcome.reason, tone: "danger" };
   if (outcome.kind === "existing") {
