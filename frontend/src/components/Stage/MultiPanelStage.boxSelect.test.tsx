@@ -75,7 +75,7 @@ function lay(u: uPlot): uPlot {
   return u;
 }
 function mouse(u: uPlot, type: string, x: number, y: number): void {
-  const e = new MouseEvent(type, { button: 0, clientX: x, clientY: y, bubbles: true });
+  const e = new MouseEvent(type, { button: 0, buttons: type === "mouseup" ? 0 : 1, clientX: x, clientY: y, bubbles: true });
   Object.defineProperty(e, "movementX", { value: 1 }); // uPlot drops a mousemove during a drag that moved 0 px
   (type === "mousemove" || type === "mousedown" ? u.over : document).dispatchEvent(e);
 }
@@ -147,6 +147,29 @@ describe("a facet grid", () => {
     drag(u, [u.valToPos(x0, "x"), u.valToPos(y[1], "y")], [u.bbox.width + 4000, u.valToPos(y[0], "y")]);
     await waitFor(() => expect(selected()).toEqual(rows));
     expect(selected()!.every((r) => F.facet.g[r] === level)).toBe(true); // no neighbour's rows came with it
+  });
+
+  it("a drag that exits its panel keeps following the pointer, clamped to the panel edge", async () => {
+    const { level, x0, y } = F.facet.cross;
+    const ps = await mountFacet(facetSheet(), { excludedDisplay: "hide" });
+    const u = ps[level];
+    // What a browser sends: moves over the panel, then mouseleave at the edge, then moves over the page
+    // (never over the panel) with the button still down, then the button released out there.
+    const start: [number, number] = [u.valToPos(x0, "x"), u.valToPos(y[1], "y")];
+    mouse(u, "mousedown", ...start);
+    mouse(u, "mousemove", u.bbox.width - 20, u.bbox.height / 2);
+    u.over.dispatchEvent(new MouseEvent("mouseleave", { clientX: u.bbox.width + 1, clientY: u.bbox.height / 2 }));
+    for (const [px, py] of [[u.bbox.width + 80, u.bbox.height + 40], [u.bbox.width + 400, u.bbox.height + 300]]) {
+      document.body.dispatchEvent(new MouseEvent("mousemove", { buttons: 1, clientX: px, clientY: py, bubbles: true }));
+    }
+    mouse(u, "mouseup", u.bbox.width + 400, u.bbox.height + 300);
+    // numpy's answer: the rows of this level inside x0..panel right edge and panel bottom edge..y[1] (excluded rows hidden).
+    const [xr, yb] = [u.posToVal(u.bbox.width, "x"), u.posToVal(u.bbox.height, "y")];
+    const want = F.facet.x.flatMap((x, r) => (
+      F.facet.g[r] === level && !F.facet.excluded.includes(r) && x >= x0 && x <= xr && F.facet.y[r] >= yb && F.facet.y[r] <= y[1] ? [r] : []
+    ));
+    expect(want.length).toBeGreaterThan(F.facet.cross.rows.length - 1);
+    await waitFor(() => expect(selected()).toEqual(want));
   });
 
   it("honours the plot's row window: the rows are the sheet's, offset by the window's first row", async () => {

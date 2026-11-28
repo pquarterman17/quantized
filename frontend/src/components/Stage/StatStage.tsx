@@ -13,8 +13,9 @@
 // snapshot — `windows/BackgroundAltModes.tsx`).
 
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
+import { withTextGroupChannels } from "../../lib/groupableColumns";
 import type { StatMode } from "../../lib/statstage";
 import { setStatHideEmptyLevels, setStatMarks, setStatPicks, setStatShowGroupN, setStatShowSummary } from "../../store/statLevelOptions";
 import { useActiveDataset, useApp } from "../../store/useApp";
@@ -65,7 +66,8 @@ export default function StatStage() {
   const theme = useApp((s) => s.theme);
   const accent = useApp((s) => s.accent);
   const setStatMode = useApp((s) => s.setStatMode);
-  const active = useActiveDataset();
+  const storeActive = useActiveDataset();
+  const active = useMemo(() => (storeActive ? withTextGroupChannels(storeActive) : null), [storeActive]); // CSV text columns join the group / facet pickers
   const yKeys = useApp((s) => s.yKeys);
   const xKey = useApp((s) => s.xKey);
   const seriesOrder = useApp((s) => s.seriesOrder);
@@ -299,7 +301,10 @@ export default function StatStage() {
       {st.hasData && st.error && (
         <div
           className="qzk-ds-meta"
-          style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", textAlign: "center", padding: 24 }}
+          data-testid="stat-stage-error"
+          // Below the tool bar and click-through: this covered the mode tabs and pickers, so a mode that
+          // errored (Paired with no "after" column) could not be left (acceptance pass 13, B3).
+          style={{ position: "absolute", inset: 0, top: toolsClearance, pointerEvents: "none", display: "grid", placeItems: "center", textAlign: "center", padding: 24 }}
         >
           {st.error}
         </div>

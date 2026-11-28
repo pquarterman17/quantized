@@ -147,7 +147,7 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
   },
   "meta-factors": { description: "Clean up metadata; add a metadata field as a factor column.", keywords: "promote sample unify" },
   transpose: { description: "Swap worksheet rows and columns in a new derived dataset.", keywords: "reshape" },
-  "stack-columns": { description: "Reshape selected wide columns into value and category columns in long form.", keywords: "jmp reshape stack long form wide" },
+  "stack-columns": { description: "Reshape selected wide columns into value and category columns in long form, as a recorded transform step (Pivot by time and key also stacks, for a time-series sheet).", keywords: "jmp reshape stack long form wide" },
   "unstack-columns": {
     description: "Pivot category and value columns into separate columns in a wide worksheet.",
     keywords: "jmp unstack pivot wide long reshape",

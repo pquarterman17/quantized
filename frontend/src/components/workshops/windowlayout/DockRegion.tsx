@@ -33,6 +33,11 @@ export default function DockRegion({
   };
   const cols = gridColumns(refs.length);
   // The previous window's percentage of the pair's length: the splitter's own value.
+  // Each window's flex-grow is its share OF THE WINDOWS SHOWN. A minimized window keeps its share in the layout but is
+  // not in `refs`; a lone survivor with share 0.5 then got `flex: 0.5` and filled only half of the slot (acceptance
+  // pass 13, U4), because flex-grow below 1 in total leaves the rest of the space empty.
+  const total = refs.reduce((sum, r) => sum + (layout.placements[r]?.share ?? 1), 0) || 1;
+  const grow = (r: WindowRef) => (layout.placements[r]?.share ?? 1) / total;
   const share = (a: WindowRef, b: WindowRef) => {
     const [x, y] = [layout.placements[a]?.share ?? 1, layout.placements[b]?.share ?? 1];
     return Math.round((x / (x + y)) * 100);
@@ -58,7 +63,7 @@ export default function DockRegion({
               onCommit={(delta) => applyLayout((l) => resizeShares(l, slot, refs[i - 1], ref, delta, length()))}
             />
           )}
-          <div className="qzk-wl-cell" style={grid ? undefined : { flex: `${layout.placements[ref]?.share ?? 1} 1 0` }}>
+          <div className="qzk-wl-cell" style={grid ? undefined : { flex: `${grow(ref)} 1 0` }}>
             <LayoutWindowFrame refId={ref} slot={slot} title={titleOf(ref)} />
           </div>
         </Fragment>

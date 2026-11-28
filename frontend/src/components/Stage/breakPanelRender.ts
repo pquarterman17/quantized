@@ -56,7 +56,7 @@ import { errorReach } from "../../lib/uplotErrorRange";
 import { LINEAR_PATHS, POINTS_PATHS } from "../../lib/uplotPaths";
 import { buildOpts, type BuildOptsArgs } from "../../lib/uplotOpts";
 import { applySeamSides, breakPlotWidths, yTitleKey } from "./breakPanelLayout";
-import { boxCursor, panelRangeSelect, type PanelBoxHandler } from "./panelBoxSelect";
+import { boxCursor, clampBoxDragToPanel, panelRangeSelect, type PanelBoxHandler } from "./panelBoxSelect";
 
 /** The width of the hashed seam drawn between two adjacent break panels. */
 const BREAK_GLYPH_W = 20;
@@ -247,7 +247,9 @@ export function renderBreakPanels(host: HTMLDivElement, args: BreakPanelsArgs): 
     // No x-zoom sync: each panel shows its OWN x-slice, so copying one
     // panel's x domain onto another would show the wrong slice there.
     opts.hooks = { ...opts.hooks, setScale: [...(opts.hooks?.setScale ?? []), ySync] };
-    plots.push(new uPlot(opts, p.payload.data, div));
+    const plot = new uPlot(opts, p.payload.data, div);
+    clampBoxDragToPanel(plot, args.cell.tool);
+    plots.push(plot);
   });
   const spans = args.panels.map((p) => Math.max(p.xRange[1] - p.xRange[0], 1e-9));
   rowSpans.set(plots, spans);

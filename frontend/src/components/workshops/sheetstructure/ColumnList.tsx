@@ -61,7 +61,14 @@ function CommitInput({ value, label, onCommit }: { value: string; label: string;
 function Row({ row, id, selected, onPick }: { row: ColumnListRow; id: string; selected: boolean; onPick: () => void }) {
   const tag = row.letter;
   return (
-    <tr aria-selected={selected} onClick={onPick}>
+    <tr
+      aria-selected={selected}
+      // A click INTO a field or the designation menu edits it; picking the row would open the worksheet and
+      // move focus there, so the first key typed would land in the grid (acceptance pass 13, B1).
+      onClick={(e) => {
+        if (!(e.target as HTMLElement).closest("input, select, option")) onPick();
+      }}
+    >
       <td>{tag}</td>
       <td>
         <CommitInput label={`Name, column ${tag}`} value={row.name} onCommit={(v) => v.trim() && setColumnHeader(id, row.col, { label: v })} />

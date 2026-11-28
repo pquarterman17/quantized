@@ -107,7 +107,7 @@ def _place_texts(
             continue
         ax.text(
             xs[i], ys[i], own, ha="center", va="center", fontsize=size, color=colour,
-            clip_on=True, zorder=zorder + 0.1, gid="text-symbol",
+            clip_on=False, zorder=zorder + 0.1, gid="text-symbol",
         )
     return (first.strip()[0], size) if first else ("", size)
 

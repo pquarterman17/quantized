@@ -26,7 +26,7 @@ import type { SeriesStyle } from "../../lib/types";
 import { LINEAR_PATHS, POINTS_PATHS } from "../../lib/uplotPaths";
 import { buildOpts, type BuildOptsArgs } from "../../lib/uplotOpts";
 import { alignGutters, resizeAligned, sharedGutters } from "./panelGutters";
-import { boxCursor, panelRangeSelect, withBoxHooks, type PanelBoxHandler } from "./panelBoxSelect";
+import { boxCursor, clampBoxDragToPanel, panelRangeSelect, withBoxHooks, type PanelBoxHandler } from "./panelBoxSelect";
 
 /** Everything a stack panel's `buildOpts` call needs that is the SAME for
  *  every panel. `width`/`height`, and the three per-panel lists below, are
@@ -168,7 +168,9 @@ export function renderStackPanels(host: HTMLDivElement, args: StackPanelsArgs): 
   const plots = built.map((opts, i) => {
     const div = document.createElement("div");
     host.appendChild(div);
-    return new uPlot({ ...opts, height: heights[i] }, args.panels[i].data, div);
+    const plot = new uPlot({ ...opts, height: heights[i] }, args.panels[i].data, div);
+    clampBoxDragToPanel(plot, args.cell.tool);
+    return plot;
   });
   bottomExtra.set(plots, extra);
   alignGutters(plots, shared);

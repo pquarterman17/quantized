@@ -10,6 +10,7 @@
 import { categoryLevels, isCategoricalChannel } from "./categorical";
 import { resolveCategoryLabels } from "./barlayout";
 import { textColumnEntries } from "./originTextColumnCells";
+import { textGroupColumns } from "./groupableColumns";
 import type { DataStruct } from "./types";
 
 export interface GroupColumn { key: number; label: string }
@@ -20,7 +21,7 @@ const textIndex = (key: number): number => -2 - key;
 /** Every column that can hold group names, in the order the sheet shows them. */
 export function groupColumns(d: DataStruct): GroupColumn[] {
   const channels = d.labels.flatMap((label, key) => (isCategoricalChannel(d, key) ? [{ key, label }] : []));
-  return [...channels, ...textColumnEntries(d).map(([label], k) => ({ key: -2 - k, label }))];
+  return [...channels, ...textGroupColumns(d).map(({ label, entry }) => ({ key: -2 - entry, label }))];
 }
 
 /** A reader of one group column: its display name, and the group name at each row

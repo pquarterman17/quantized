@@ -132,7 +132,7 @@ test("Origin worksheet operations: Set As, sort + undo, formulas, row statistics
 
   // Unstack: one Moment column per Sample, keyed by Temp.
   const before = (await sheet(page)).count;
-  await runPaletteCommand(page, "Unstack / pivot to wide form…");
+  await runPaletteCommand(page, "Unstack by category to wide form…");
   const reshape = page.locator(".qzk-win").filter({ has: page.getByText("Reshape & combine", { exact: true }) });
   await expect(reshape).toBeVisible();
   await reshape.getByRole("combobox", { name: "Row key" }).selectOption({ label: "Temp" });

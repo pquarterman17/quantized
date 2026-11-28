@@ -35,7 +35,7 @@ import { LINEAR_PATHS, POINTS_PATHS } from "../../lib/uplotPaths";
 import type { SeriesStyle } from "../../lib/types";
 import { buildOpts, type BuildOptsArgs } from "../../lib/uplotOpts";
 import { alignGutters, resizeAligned, sharedGutters } from "./panelGutters";
-import { boxCursor, panelRangeSelect, withBoxHooks, type PanelBoxHandler } from "./panelBoxSelect";
+import { boxCursor, clampBoxDragToPanel, panelRangeSelect, withBoxHooks, type PanelBoxHandler } from "./panelBoxSelect";
 
 /** Everything a facet cell's `buildOpts` call needs that is the SAME for
  *  every panel. `width`/`height` (the computed cell size), `title` (the
@@ -112,7 +112,9 @@ export function renderFacetGrid(host: HTMLDivElement, args: FacetGridArgs): uPlo
     opts.cursor = boxCursor(opts, args.cell.tool, { key: args.syncKey });
     opts.hooks = withBoxHooks(opts, [args.onSetScale]);
     sharedGutters(opts, shared); // a column's x ticks line up row to row
-    return new uPlot(opts, p.payload.data, div);
+    const plot = new uPlot(opts, p.payload.data, div);
+    clampBoxDragToPanel(plot, args.cell.tool);
+    return plot;
   });
   alignGutters(plots, shared);
   return plots;

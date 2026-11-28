@@ -52,6 +52,19 @@ def test_per_point_texts_are_drawn_where_the_canvas_draws_them(
     assert all(line.get_marker() in ("", "None", None) for line in ax.lines)
 
 
+@pytest.mark.parametrize("case", CASES, ids=lambda c: c["name"])
+def test_a_text_symbol_on_the_plot_edge_is_drawn_whole_as_on_screen(
+    monkeypatch: pytest.MonkeyPatch, case: dict[str, Any]
+) -> None:
+    """Acceptance 13 U7: every case's first row sits on the axis minimum. The canvas draws such a
+    point whole (``uplotTextSymbols.edge.test.ts``); the figure used to clip its text."""
+    fig = _fig(monkeypatch, case["request"])
+    ax = fig.axes[0]
+    texts = [t for t in ax.texts if t.get_gid() == "text-symbol"]
+    assert texts
+    assert all(not t.get_clip_on() for t in texts)
+
+
 def test_the_legend_swatch_is_the_first_character(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
