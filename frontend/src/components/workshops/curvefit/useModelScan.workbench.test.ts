@@ -30,6 +30,7 @@ const DATA: DataStruct = {
 const ENTRY: ScanEntry = {
   name: "Linear", kind: "registry", error: null, k: 2, params: [10, 10], paramNames: ["m", "b"],
   R2: 0.999, RMSE: 0.1, AIC: -20, AICc: -19, deltaAICc: 0, weight: 0.9,
+  adjR2: 0.99, chiSqRed: 0.01, BIC: -18, converged: true,
 };
 
 beforeEach(() => {

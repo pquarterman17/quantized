@@ -61,6 +61,8 @@ export function registerNamedRangeDependants(c: NamedRangeDependants): () => voi
 
 // Formulas that read a range with `rng("Name")` (R4b).
 registerNamedRangeDependants(formulaDependants);
+// Plot windows and analysis inputs that follow a range live register themselves from store/rangeLinkSync (which imports
+// this module, not the other way round, so the first paint's chunk map carries nothing for them). Any link loads it.
 
 /** Everything that depends on range `id`, for the delete dialog. */
 export function namedRangeDependants(id: string, state: AppState = useApp.getState()): NamedRangeDependant[] {

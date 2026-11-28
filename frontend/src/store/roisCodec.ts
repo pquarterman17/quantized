@@ -7,7 +7,9 @@
 // re-exported through rois.ts (slice 18).
 
 import type { CutSpace } from "../lib/mapcuts";
-import type { RoiDef, RoiRect, RoiRuler, RoiSector } from "../lib/roi";
+import type { RoiRect, RoiRuler, RoiSector } from "../lib/roi";
+import type { RoiDef } from "../lib/roiDef";
+import type { RoiPolygon } from "../lib/roiPolygon";
 
 /** Serialize `savedRois` for the .dwk doc. A defensive shallow copy — RoiDef
  *  is already plain JSON-safe data (no dataset references, no undefined-vs-
@@ -49,6 +51,18 @@ function isRoiRulerShape(v: unknown): v is RoiRuler {
   );
 }
 
+/** A polygon is saved only on an RSM pair (the `"map"` space has no saved form), with at least three finite vertices. */
+function isRoiPolygonShape(v: unknown): v is RoiPolygon {
+  if (typeof v !== "object" || v === null) return false;
+  const o = v as Record<string, unknown>;
+  return (
+    isCutSpace(o.space) &&
+    Array.isArray(o.points) &&
+    o.points.length >= 3 &&
+    o.points.every((p) => Array.isArray(p) && p.length === 2 && isFiniteNumber(p[0]) && isFiniteNumber(p[1]))
+  );
+}
+
 function isRoiSectorShape(v: unknown): v is RoiSector {
   if (typeof v !== "object" || v === null) return false;
   const o = v as Record<string, unknown>;
@@ -78,6 +92,8 @@ export function deserializeRois(v: unknown, warnings: string[]): RoiDef[] {
       out.push({ id: o.id, name: o.name, kind: "ruler", ruler: o.ruler });
     } else if (o.kind === "sector" && isRoiSectorShape(o.sector)) {
       out.push({ id: o.id, name: o.name, kind: "sector", sector: o.sector });
+    } else if (o.kind === "polygon" && isRoiPolygonShape(o.polygon)) {
+      out.push({ id: o.id, name: o.name, kind: "polygon", polygon: o.polygon });
     } else {
       warnings.push(`skipped saved ROI "${o.name}" with an invalid or unknown shape`);
     }

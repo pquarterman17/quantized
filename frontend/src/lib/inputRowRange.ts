@@ -30,6 +30,9 @@ export interface RecordedRowRange {
   to: number;
   /** The source's row count when the result was saved ("of 48"). */
   rows: number;
+  /** The named range the rows were read through (ROW_RANGE_CONTRACT 5.2), by its name when saved: provenance only. The
+   *  rows above are what was read, so a later retarget or rename changes nothing here. */
+  name?: string;
 }
 
 /** One ranged source of an output worksheet. */
@@ -38,7 +41,7 @@ export interface SourceRowRange extends RecordedRowRange {
 }
 
 export function recordRowRange(range: RowRange, rows: number): RecordedRowRange {
-  return { from: range.from, to: range.to, rows };
+  return { from: range.from, to: range.to, rows, ...(range.namedAs ? { name: range.namedAs } : {}) };
 }
 
 /** Why the live `range` cannot be recorded for a sheet of `rows` rows, or null. A range
@@ -53,15 +56,15 @@ export function rowRangeRecordRefusal(range: RowRange, rows: number, what: strin
  *  `0 <= from <= to < rows`. Fails closed: a malformed record reads as "none recorded". */
 export function readRecordedRowRange(value: unknown): RecordedRowRange | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
-  const { from, to, rows } = value as Record<string, unknown>;
+  const { from, to, rows, name } = value as Record<string, unknown>;
   if (!Number.isInteger(from) || !Number.isInteger(to) || !Number.isInteger(rows)) return null;
   const [a, b, n] = [from as number, to as number, rows as number];
-  return a >= 0 && b >= a && b < n ? { from: a, to: b, rows: n } : null;
+  return a >= 0 && b >= a && b < n ? { from: a, to: b, rows: n, ...(typeof name === "string" && name ? { name: name.slice(0, 64) } : {}) } : null;
 }
 
 /** "rows 21-44 of 48" (1-based). The caller says "when saved". */
 export function recordedRowRangeLabel(range: RecordedRowRange): string {
-  return `${rowRangeLabel(range)} of ${range.rows.toLocaleString()}`;
+  return `${rowRangeLabel(range)} of ${range.rows.toLocaleString()}${range.name ? ` (named range ${range.name})` : ""}`;
 }
 
 /** The ranges recorded on an output worksheet's metadata (invalid entries are skipped). */

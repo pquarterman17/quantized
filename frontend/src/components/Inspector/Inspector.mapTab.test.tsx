@@ -3,7 +3,7 @@
 // no curves, so they edited nothing visible there.
 
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { dock, emptyLayout } from "../../lib/windowLayout/ops";
 import { mapViewFor } from "../../lib/mapView";
@@ -11,6 +11,10 @@ import { defaultPlotView, type PlotWindow } from "../../lib/plotview";
 import type { DataStruct } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import Inspector from "./Inspector";
+
+// Plan item 50: these tests cover the PANEL editors (the reversal path), so
+// they run with the switch at "panel"; Inspector.popupMode.test.tsx covers "popup".
+vi.mock("../../lib/objectEditorMode", () => ({ OBJECT_EDITOR: "panel", objectEditorIsPopup: () => false }));
 
 const data: DataStruct = {
   time: [1, 2, 3],

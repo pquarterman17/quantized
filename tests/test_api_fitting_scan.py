@@ -194,3 +194,18 @@ def test_scan_job_cancel_via_jobs_api_ends_cancelled_with_no_result(
     assert r.status_code == 200
     snaps = _poll_terminal(r.json()["job_id"])
     assert snaps[-1]["status"] == "done"
+
+
+def test_scan_job_result_carries_the_rank_table_columns() -> None:
+    """Rank all models: the polled job result has every column the table shows."""
+    sub = client.post(SCAN_JOB, json={**_payload(), "models": ["Linear", "Gaussian", "Nope"]})
+    snaps = _poll_terminal(sub.json()["job_id"])
+    assert snaps[-1]["status"] == "done"
+    res = client.get(f"/api/jobs/{sub.json()['job_id']}/result").json()["result"]["results"]
+    top = res[0]
+    assert top["name"] == "Gaussian" and top["converged"] is True
+    for key in ("AIC", "AICc", "BIC", "adjR2", "chiSqRed", "R2"):
+        assert isinstance(top[key], float)
+    assert top["BIC"] > top["AIC"] - 1e-9  # ln(81) > 2: BIC penalises k harder
+    # the unknown model is a row with a reason, ranked last; the others still ran
+    assert res[-1]["name"] == "Nope" and res[-1]["error"] and res[-1]["converged"] is None

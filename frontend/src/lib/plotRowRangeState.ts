@@ -14,7 +14,11 @@ export function plotRowRangeState(
   rows: number,
 ): { applied: RowRange | null; label: string; refusal: string | null } {
   if (!range) return { applied: null, label: "", refusal: null };
+  // A window that FOLLOWS a named range says whose (ROW_RANGE_CONTRACT 5.2). One that cannot be read draws NO rows
+  // (never every row), and says why.
+  const tag = range.namedAs ? `${range.namedAs}: ` : "";
+  if (range.refused !== undefined) return { applied: null, label: `${tag}no rows`, refusal: `${range.refused}. The plot draws no rows until the named range can be read, or this link is cleared` };
   const refusal = rowRangeRefusal(range, rows);
   const label = rowRangeLabel(range);
-  return refusal ? { applied: null, label: `${label} not applied`, refusal } : { applied: range, label: `${label} of ${rows.toLocaleString()}`, refusal: null };
+  return refusal ? { applied: null, label: `${tag}${label} not applied`, refusal } : { applied: range, label: `${tag}${label} of ${rows.toLocaleString()}`, refusal: null };
 }

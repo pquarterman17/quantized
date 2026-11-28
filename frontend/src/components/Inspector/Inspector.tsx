@@ -37,6 +37,7 @@ import TitlesCard from "./TitlesCard";
 import { useInspectorCardState } from "./useInspectorCardState";
 import { lazyRegion } from "../../lib/lazyRegion";
 import { folderPathLabel } from "../../lib/foldertree";
+import { objectEditorIsPopup } from "../../lib/objectEditorMode";
 import { CardStateContext } from "../primitives/cardState";
 import { selectionKey, useExclusiveSelection, usePlotSelection, useSelectionGuards } from "../../store/plotSelection";
 import { useActiveDataset, useApp } from "../../store/useApp";
@@ -84,17 +85,21 @@ function InspectorBody() {
   const shapeId = useApp((s) => s.selectedShapeId);
   // The card the selection points at (Plot tab only): it is hoisted, opened
   // and scrolled into view. A legend's controls sit in the Selection section.
+  // Plan item 50: in popup mode a curve or axis has no card of its own to hoist.
+  const popup = objectEditorIsPopup();
   const focus = !plotTab
     ? null
     : annotationId
       ? "Annotations"
       : shapeId
         ? "Shapes"
-        : sel?.kind === "series"
-          ? "Series style"
-          : sel?.kind === "axis"
-            ? "Axes"
-            : null;
+        : popup
+          ? null
+          : sel?.kind === "series"
+            ? "Series style"
+            : sel?.kind === "axis"
+              ? "Axes"
+              : null;
   const focusKey = plotTab ? (annotationId ? `a:${annotationId}` : shapeId ? `s:${shapeId}` : selectionKey(sel)) : "";
   const cardState = useInspectorCardState(ctx, focus, focusKey);
   // A new selection: bring a selected curve's style row into view — "nearest",
@@ -149,7 +154,7 @@ function InspectorBody() {
     ["Annotations", <AnnotationsCard />],
     ["Shapes", <ShapesCard />],
     // Line/Scatter/marker controls style XY curves; a map draws none (figures audit #18).
-    ["Series style", stageTab !== "map" && <SeriesStyleCard active={active} selectedChannel={seriesChannel} />],
+    ["Series style", stageTab !== "map" && !popup && <SeriesStyleCard active={active} selectedChannel={seriesChannel} />],
     ["Macro recorder", <MacroCard />],
   ];
   const plotLike = plotTab || ctx === "map";

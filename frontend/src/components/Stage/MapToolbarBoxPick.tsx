@@ -3,15 +3,17 @@
 // Pick button is shown for every map: where the extraction coordinates are not
 // well defined the click is refused with the reason in the status line.
 
-import { mapPickPoint } from "../../lib/glyphs";
+import { mapPickPoint, mapPolygonRoi } from "../../lib/glyphs";
 import type { MapToolbarProps } from "./MapToolbar";
 
-type Props = Pick<MapToolbarProps, "roiMode" | "onToggleRoi" | "pickMode" | "onTogglePick"> & {
+type Props = Pick<MapToolbarProps, "roiMode" | "onToggleRoi" | "pickMode" | "onTogglePick" | "polygonMode" | "onTogglePolygon"> & {
+  /** Show the Polygon button: the map can be drawn on. */
+  showPolygon: boolean;
   /** Show the Box button: the cut tools (which hold it) are not on screen. */
   showBox: boolean;
 };
 
-export default function MapToolbarBoxPick({ roiMode, onToggleRoi, pickMode, onTogglePick, showBox }: Props) {
+export default function MapToolbarBoxPick({ roiMode, onToggleRoi, pickMode, onTogglePick, polygonMode, onTogglePolygon, showPolygon, showBox }: Props) {
   return (
     <>
       <span className="qzk-tool-sep" />
@@ -24,6 +26,17 @@ export default function MapToolbarBoxPick({ roiMode, onToggleRoi, pickMode, onTo
           onClick={onToggleRoi}
         >
           ▣
+        </button>
+      )}
+      {showPolygon && (
+        <button
+          aria-label="Polygon ROI"
+          aria-pressed={polygonMode === "polygon"}
+          className={`qzk-tool-btn${polygonMode === "polygon" ? " active" : ""}`}
+          title="Polygon: click to add vertices, double-click or Enter closes it, Backspace removes the last, Esc abandons it, drag a vertex to move it"
+          onClick={onTogglePolygon}
+        >
+          {mapPolygonRoi}
         </button>
       )}
       <button

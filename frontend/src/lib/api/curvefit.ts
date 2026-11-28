@@ -165,6 +165,12 @@ export interface ScanEntry {
   AICc: number | null;
   deltaAICc: number | null;
   weight: number | null;
+  /** Rank-all-models columns (`calc.fit_scan._extra_metrics`). `converged` is the
+   *  optimiser's own flag; null on a failed candidate. */
+  adjR2: number | null;
+  chiSqRed: number | null;
+  BIC: number | null;
+  converged: boolean | null;
 }
 
 export interface ScanResponse {

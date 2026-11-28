@@ -284,7 +284,7 @@ export default function CurveFitPanel() {
           key={modelName}
           initial={currentCustom}
         />
-        <ModelScanSection state={modelScan} onApply={applyScanned} />
+        <ModelScanSection state={modelScan} onApply={applyScanned} groups={modelGroups} />
       </ToolWindow>
     );
   }
@@ -385,6 +385,7 @@ export default function CurveFitPanel() {
           manualKey={manualKey}
           scaleErrors={scaleErrors}
           modelOptions={modelOptions}
+          modelGroups={modelGroups}
           customModels={customModels}
           modelScan={modelScan}
           onApplyScanned={applyScanned}
