@@ -118,7 +118,9 @@ def time_column_kinds(data_tokens: Sequence[Sequence[str]], n_cols: int) -> list
 
 # The shared "is this a time-of-day column" rule (direct import AND the wizard's
 # proposal): strict, so a column is read as a time of day only on evidence.
-_CLOCK_RE = re.compile(r"^(\d{1,2}):([0-5]\d)(?::([0-5]\d(?:\.\d+)?))?$")
+_CLOCK_RE = re.compile(
+    r"^(\d{1,2}):([0-5]\d)(?::([0-5]\d(?:\.\d+)?))?(?:\s*([AaPp])\.?[Mm]\.?)?$"
+)
 # A header that names a time of day / a header that says the pair is not one.
 _HINT = re.compile(r"time|clock|hour|\btod\b|hh:?mm", re.IGNORECASE)
 _VETO = re.compile(r"duration|elapsed|\blap\b|split|ratio|score|dilution|mm:ss", re.IGNORECASE)
@@ -129,15 +131,18 @@ def is_clock_column(cells: Sequence[str | None], header: str = "") -> bool:
 
     Every non-blank cell (empty or whitespace-only; a ``None`` is a row too
     short to reach the column) must be ``H:MM``, ``HH:MM``, ``HH:MM:SS`` or
-    ``HH:MM:SS.fff`` with hours 0-23 and minutes and seconds 0-59, and at
-    least one cell is non-blank. ``25:00`` (an Excel ``[h]:mm:ss`` duration),
-    ``12:60``, ``1:2:3``, AM/PM cells, a stray word or ``NaN`` fail it.
+    ``HH:MM:SS.fff``, optionally followed by AM/PM (``1:05 PM``, as the
+    wizard reads it), with hours 0-23 (1-12 with AM/PM) and minutes and
+    seconds 0-59, and at least one cell is non-blank. ``25:00`` (an Excel
+    ``[h]:mm:ss`` duration), ``12:60``, ``1:2:3``, ``13:00 PM``, a stray word
+    or ``NaN`` fail it.
 
     ``12:30`` alone is also a ratio or minutes:seconds. A column with no cell
-    carrying seconds is therefore a time of day only when its header names
-    one (``time``, ``clock``, ``hour``, ``HH:MM``) and does not say otherwise
+    carrying seconds or AM/PM is therefore a time of day only when its header
+    names one (``time``, ``clock``, ``hour``, ``HH:MM``) and does not say otherwise
     (``duration``, ``elapsed``, ``lap``, ``ratio``, ``score``, ``mm:ss``).
-    Any cell with seconds settles it: a ``mm:ss`` value never has three parts.
+    Any cell with seconds or AM/PM settles it: a ``mm:ss`` value never has
+    three parts, and a score never ends in PM.
     """
     seen = with_seconds = False
     for cell in cells:
@@ -145,10 +150,13 @@ def is_clock_column(cells: Sequence[str | None], header: str = "") -> bool:
         if not text:
             continue
         m = _CLOCK_RE.match(text)
-        if m is None or int(m.group(1)) > 23:
+        if m is None:
+            return False
+        hours = int(m.group(1))
+        if not (1 <= hours <= 12 if m.group(4) else hours <= 23):
             return False
         seen = True
-        with_seconds = with_seconds or m.group(3) is not None
+        with_seconds = with_seconds or m.group(3) is not None or m.group(4) is not None
     if not seen:
         return False
     return with_seconds or bool(_HINT.search(header) and not _VETO.search(header))
