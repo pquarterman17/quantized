@@ -11,6 +11,12 @@ export const COND_NAMES: readonly string[] = ["sumif", "countif", "averageif", "
 /** The whole-column signal functions (lib/formulaSignal.ts); the exported script computes them too. */
 export const SIGNAL_NAMES: ReadonlySet<string> = new Set(["movmax", "movmin", "cummax", "cummin", "cumprod", "savgol"]);
 
+/** savgol's optional trailing boundary word, scipy's `savgol_filter` modes (calc/column_formula_signal.py). */
+export const SAVGOL_MODES: readonly string[] = ["mirror", "nearest", "constant", "wrap", "interp"];
+
+/** The moving-window functions an exported script also computes (plain-number arguments only; calc/column_formula_signal.py). */
+export const HEADLESS_STAT_NAMES: ReadonlySet<string> = new Set([...WINDOW_NAMES, "emovavg"]);
+
 /** Every function of this family. */
 export const STAT_CALL_NAMES: ReadonlySet<string> = new Set([...WINDOW_NAMES, "emovavg", ...PAIR_NAMES, "percentile", ...COLUMN_NAMES, ...COND_NAMES]);
 

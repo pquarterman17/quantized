@@ -55,6 +55,7 @@ const CORPUS = [
   'fit("Gaussian", "A") * fitval("Gaussian", A - 1)',
   'fit("Gaussian").A - fit("Gaussian", "μ")',
   "fit('say \"hi\"', 'p0') + 1",
+  "savgol(A, 3, 1) + savgol(B, 3, 1, mirror) - savgol(C, 3, 2, interp)",
 ];
 
 const cols: Record<string, number[]> = { x: [0.5, 1, 1.5], A: [2, -3, 0.25], B: [5, 4, -2], C: [3, 7, 11] };

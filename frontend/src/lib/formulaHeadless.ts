@@ -17,8 +17,9 @@ import { compileFormula } from "./formula";
 import { COMPLEX_NAMES } from "./formulaComplexNames";
 import { DIST_NAMES } from "./formulaDistNames";
 import { CONSTS, FUNCS } from "./formulaFuncs";
-import { SIGNAL_NAMES } from "./formulaStatNames";
+import { HEADLESS_STAT_NAMES, SAVGOL_MODES, SIGNAL_NAMES } from "./formulaStatNames";
 import { tokenize } from "./formulaTokenize";
+import type { Tok } from "./formulaTypes";
 import { WAVE2_NAMES } from "./formulaWave2Names";
 
 /** calc/column_formula.py MAX_LEN. */
@@ -26,6 +27,13 @@ const MAX_LEN = 10000;
 const OPS = new Set(["+", "-", "*", "/", "//", "%", "^", "**", "(", ")", ","]);
 /** Row-aware / special forms the app parses before the plain table. */
 const APP_ONLY = new Set(["if", "where", "row", "lag", "diff", "cumsum", "col", "sheet", "rng", "fit", "fitval"]);
+
+/** `fn(COL, n[, n])` with plain unsigned numbers: the only shape the script's movavg family reads. */
+function plainNumberArgs(toks: Tok[], i: number): boolean {
+  const nums = toks[i].v === "emovavg" ? 1 : 2;
+  const shape = ["(", "name", ...Array.from({ length: nums }, () => [",", "num"]).flat(), ")"];
+  return shape.every((want, k) => (want === "name" || want === "num" ? toks[i + 1 + k]?.t === want : toks[i + 1 + k]?.v === want));
+}
 
 /** Why `expr` is outside the headless subset, or null. */
 export function headlessFormulaProblem(expr: string): string | null {
@@ -49,8 +57,11 @@ export function headlessFormulaProblem(expr: string): string | null {
     if (t.t === "str") return "it uses quoted text (col(), sheet(), fit())";
     if (t.t === "op" && !OPS.has(t.v)) return `it uses "${t.v}" (comparisons, conditionals and row indexing)`;
     if (t.t !== "name") continue;
+    // savgol's boundary word (`savgol(A, 5, 2, mirror)`): the call's own fourth argument, nowhere else.
+    if (SAVGOL_MODES.includes(t.v) && toks[i - 8]?.v === "savgol" && toks[i - 1]?.v === ",") continue;
+    if (HEADLESS_STAT_NAMES.has(t.v) && next?.v === "(" && !plainNumberArgs(toks, i)) return `${t.v}() takes a bare column and plain numbers to run in a script (the app also takes expressions)`;
     if (next?.t === "op" && next.v === "(") {
-      if (APP_ONLY.has(t.v) || !(Object.hasOwn(FUNCS, t.v) || DIST_NAMES.has(t.v) || WAVE2_NAMES.has(t.v) || SIGNAL_NAMES.has(t.v) || COMPLEX_NAMES.has(t.v))) return `it calls ${t.v}()`;
+      if (APP_ONLY.has(t.v) || !(Object.hasOwn(FUNCS, t.v) || DIST_NAMES.has(t.v) || WAVE2_NAMES.has(t.v) || SIGNAL_NAMES.has(t.v) || HEADLESS_STAT_NAMES.has(t.v) || COMPLEX_NAMES.has(t.v))) return `it calls ${t.v}()`;
       const arg = toks[i + 2];
       const close = toks[i + 3];
       if ((t.v === "min" || t.v === "max") && arg?.t === "name" && !Object.hasOwn(CONSTS, arg.v) && close?.t === "op" && close.v === ")") {

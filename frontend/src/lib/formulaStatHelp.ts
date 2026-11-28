@@ -17,6 +17,7 @@ export const STAT_ENTRIES: StatHelpEntry[] = [
   { label: "emovavg(A, n) — exponential average, alpha = 2/(n+1)", text: "emovavg(|, 5)" },
   { label: "movmax / movmin(A, back, fwd) — window cut short at the ends, as movavg; plain numbers", text: "movmax(|, 2, 2)" },
   { label: "savgol(A, window, order) — Savitzky-Golay smooth; odd window, order < window, no blanks; ends repeat the edge value (Origin's Repeat); rows equally spaced", text: "savgol(|, 5, 2)" },
+  { label: "savgol(A, window, order, mode) — mode: mirror, nearest (the default), constant (pads 0), wrap or interp (edge polynomial fit); a bare word", text: "savgol(|, 5, 2, mirror)" },
   { label: "cummax / cummin / cumprod(A) — running max / min / product down to this row; a blank cell stays blank", text: "cummax(|)" },
   { label: "correl(A, B) — correlation of two columns", text: "correl(|, B)" },
   { label: "cov(A, B) — sample covariance", text: "cov(|, B)" },

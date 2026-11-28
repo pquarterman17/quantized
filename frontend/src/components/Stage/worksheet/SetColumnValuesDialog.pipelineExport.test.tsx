@@ -73,6 +73,11 @@ const REAL = [
   ["smooth", "savgol(A, 3, 1)"], // whole-column signal functions (lib/formulaSignal.ts): the script computes them too
   ["peak", "cummax(B)"],
   ["top", "movmax(A, 1, 1)"],
+  ["edge", "savgol(A, 3, 1, mirror)"], // a boundary mode: the script passes it to scipy
+  ["avg3", "movavg(A, 1, 1)"], // the moving-window family, formerly app-only in a script
+  ["sd3", "movsd(B, 1, 1)"],
+  ["slp", "movslope(A, 2, 2)"],
+  ["ema", "emovavg(A, 3)"],
 ] as const;
 
 describe("a column added through Set Column Values, exported as a script", () => {

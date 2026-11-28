@@ -53,6 +53,12 @@ def test_headless_matches_scipy_and_numpy(case: dict[str, object]) -> None:
     )
 
 
+@pytest.mark.parametrize("expr", FX["app_only"])
+def test_app_only_forms_are_refused_by_the_script_with_a_reason(expr: str) -> None:
+    # the app takes an expression or a column as back / fwd / n; a script reads plain numbers only
+    assert formula_problem(expr)
+
+
 @pytest.mark.parametrize("expr", FX["refused"])
 def test_malformed_calls_are_refused_with_a_reason(expr: str) -> None:
     assert formula_problem(expr)
@@ -68,6 +74,10 @@ def test_malformed_calls_are_refused_with_a_reason(expr: str) -> None:
         ("savgol(A, 25, 2)", "larger than the column .24 rows."),
         ("savgol(B, 5, 2)", "blank cells"),
         ("movmax(A, 1.5, 1)", "back must be a whole number"),
+        ("movavg(A, 1.5, 1)", r"movavg\(\): back must be a whole number of rows, 0 or more"),
+        ("movslope(A, 1, 2.5)", r"movslope\(\): forward must be a whole number of rows"),
+        ("emovavg(A, 0)", r"emovavg\(\): n must be a whole number, 1 or more"),
+        ("emovavg(A, 2.5)", r"emovavg\(\): n must be a whole number, 1 or more"),
     ],
 )
 def test_bad_arguments_raise_naming_the_function(expr: str, why: str) -> None:
@@ -85,3 +95,37 @@ def test_a_column_is_added_and_can_feed_the_next_formula() -> None:
 def test_works_beside_complex_numbers() -> None:
     got = evaluate_formula(DATA, "re(complex(movmax(A, 1, 1), 0))")
     np.testing.assert_allclose(got, evaluate_formula(DATA, "movmax(A, 1, 1)"))
+
+
+def test_savgol_default_is_the_repeat_boundary_unchanged() -> None:
+    """Origin's "Repeat" is scipy ``mode="nearest"``; no mode must still be exactly that."""
+    from scipy.signal import savgol_filter
+
+    a = DATA.values[:, 0]
+    for w, p in [(3, 0), (5, 2), (9, 3)]:
+        default = evaluate_formula(DATA, f"savgol(A, {w}, {p})")
+        np.testing.assert_allclose(default, savgol_filter(a, w, p, mode="nearest"), rtol=1e-12)
+        named = evaluate_formula(DATA, f"savgol(A, {w}, {p}, nearest)")
+        np.testing.assert_array_equal(default, named)
+
+
+@pytest.mark.parametrize("mode", ["mirror", "nearest", "constant", "wrap", "interp"])
+def test_savgol_modes_match_scipy(mode: str) -> None:
+    from scipy.signal import savgol_filter
+
+    a = DATA.values[:, 0]
+    np.testing.assert_allclose(
+        evaluate_formula(DATA, f"savgol(A, 7, 2, {mode})"),
+        savgol_filter(a, 7, 2, mode=mode),
+        rtol=1e-9,
+        atol=1e-12,
+    )
+
+
+@pytest.mark.parametrize(
+    "expr", ["savgol(A, 5, 2, bogus)", "savgol(A, 5, 2, 3)", "savgol(A, 5, 2, B)"]
+)
+def test_unknown_savgol_mode_is_refused_naming_the_choices(expr: str) -> None:
+    why = formula_problem(expr)
+    assert why is not None and "unknown boundary mode" in why
+    assert "mirror, nearest, constant, wrap, interp" in why

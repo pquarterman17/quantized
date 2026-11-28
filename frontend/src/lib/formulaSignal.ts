@@ -8,9 +8,12 @@
 //                                  (the rule of movavg, lib/formulaStats.ts)
 //   cummax(A)  cummin  cumprod     running value down to each row; a blank cell stays blank
 //                                  and leaves the running value alone (as cumsum)
-//   savgol(A, window, order)       Savitzky-Golay smoothing of a column with no blanks, rows
-//                                  equally spaced; the ends repeat the first / last value
-//                                  (Origin's "Repeat" boundary; scipy mode="nearest")
+//   savgol(A, window, order[, mode])
+//                                  Savitzky-Golay smoothing of a column with no blanks, rows
+//                                  equally spaced. By default the ends repeat the first / last
+//                                  value (Origin's "Repeat" boundary; scipy mode="nearest"). The
+//                                  optional bare word is one of scipy's other modes: mirror,
+//                                  constant (pads 0), wrap, interp (polynomial fit of the edge window)
 //
 // The first argument is a bare column (not an expression, not rng() or A[i:j]: a
 // whole-column function has no row range to cut), the rest are plain unsigned
@@ -18,7 +21,7 @@
 // reads the same shape, never computes a different column than the app did.
 
 import type { ParserOps } from "./formulaRowFns";
-import { SIGNAL_NAMES } from "./formulaStatNames";
+import { SAVGOL_MODES, SIGNAL_NAMES } from "./formulaStatNames";
 import { movingWindow } from "./formulaStats";
 import type { FormulaFn, Tok } from "./formulaTypes";
 
@@ -68,13 +71,53 @@ export function savgolWeights(window: number, order: number): number[] {
   return out;
 }
 
-/** Savitzky-Golay smoothing, ends padded by repeating the first / last value. */
-export function savgol(y: readonly number[], window: number, order: number): number[] {
+/** Row index (or -1 for "pad with zero") that stands in for row `i` outside 0..n-1; window <= n keeps a single reflection enough. */
+function padIndex(mode: string, i: number, n: number): number {
+  if (i >= 0 && i < n) return i;
+  if (mode === "mirror") return i < 0 ? -i : 2 * (n - 1) - i;
+  if (mode === "wrap") return ((i % n) + n) % n;
+  if (mode === "constant") return -1;
+  return i < 0 ? 0 : n - 1; // nearest
+}
+
+/** Value of the least-squares polynomial of `order` through rows `lo .. lo + window - 1`, at row `at`. */
+function edgeFit(y: readonly number[], lo: number, window: number, order: number, at: number): number {
+  const m = (window - 1) / 2;
+  const n = order + 1;
+  const ts = Array.from({ length: window }, (_, k) => (k - m) / m);
+  // Normal equations (V'V) c = V'y, V[k][j] = t_k^j (centred and scaled so high orders stay well conditioned).
+  const a = Array.from({ length: n }, (_, i) => [...Array.from({ length: n }, (_, j) => ts.reduce((s, t) => s + t ** (i + j), 0)), ts.reduce((s, t, k) => s + t ** i * y[lo + k], 0)]);
+  for (let c = 0; c < n; c++) {
+    let p = c;
+    for (let r = c + 1; r < n; r++) if (Math.abs(a[r][c]) > Math.abs(a[p][c])) p = r;
+    [a[c], a[p]] = [a[p], a[c]];
+    for (let r = 0; r < n; r++) {
+      if (r === c) continue;
+      const f = a[r][c] / a[c][c];
+      for (let j = c; j <= n; j++) a[r][j] -= f * a[c][j];
+    }
+  }
+  const t = (at - lo - m) / m;
+  return a.reduce((s, row, j) => s + (row[n] / row[j]) * t ** j, 0);
+}
+
+/** Savitzky-Golay smoothing. `mode` is scipy's `savgol_filter` boundary mode (default: ends repeat the first / last value). */
+export function savgol(y: readonly number[], window: number, order: number, mode = "nearest"): number[] {
   const w = savgolWeights(window, order);
   const m = (window - 1) / 2;
-  const at = (i: number): number => y[Math.min(y.length - 1, Math.max(0, i))];
-  return y.map((_, r) => w.reduce((s, wk, j) => s + wk * at(r + j - m), 0));
+  const n = y.length;
+  const at = (i: number): number => {
+    const k = padIndex(mode, i, n);
+    return k < 0 ? 0 : y[k];
+  };
+  return y.map((_, r) => {
+    if (mode === "interp" && r < m) return edgeFit(y, 0, window, order, r);
+    if (mode === "interp" && r >= n - m) return edgeFit(y, n - window, window, order, r);
+    return w.reduce((s, wk, j) => s + wk * at(r + j - m), 0);
+  });
 }
+
+const badMode = (v: string | number): string => `savgol(): unknown boundary mode "${v}"; use ${SAVGOL_MODES.join(", ")} (a bare word)`;
 
 function checkSavgol(window: number, order: number, y: readonly number[]): void {
   whole("savgol", "window", window, 3);
@@ -101,6 +144,13 @@ export function tryParseSignalCall(fname: string, ops: ParserOps, consts: Record
     if (n.t !== "num") throw new Error(`${fname}() takes the column and ${ARITY[fname]} plain numbers`);
     nums.push(n.v);
   }
+  let mode: string | undefined;
+  if (fname === "savgol" && isOp(ops.peek(), ",")) {
+    ops.eat();
+    const w = ops.eat();
+    if (w.t !== "name" || !SAVGOL_MODES.includes(w.v)) throw new Error(badMode(w.v));
+    mode = w.v;
+  }
   if (!isOp(ops.peek(), ")")) throw new Error(ARITY[fname] ? `${fname}() takes the column and ${ARITY[fname]} plain numbers` : `${fname}() takes just a column`);
   ops.expectOp(")");
   const col = t.v;
@@ -108,7 +158,7 @@ export function tryParseSignalCall(fname: string, ops: ParserOps, consts: Record
   const compute = (y: readonly number[]): number[] => {
     if (fname === "savgol") {
       checkSavgol(nums[0], nums[1], y);
-      return savgol(y, nums[0], nums[1]);
+      return savgol(y, nums[0], nums[1], mode);
     }
     if (fname === "movmax" || fname === "movmin") return movingWindow(fname === "movmax" ? "max" : "min", y, whole(fname, "back", nums[0]), whole(fname, "forward", nums[1]));
     return running(fname as "cummax" | "cummin" | "cumprod", y);
