@@ -211,14 +211,33 @@ describe("pipelineToPython", () => {
       expect(s, expr).not.toContain("add_formula_columns");
       expect(s, expr).not.toContain("qz.apply_corrections");
     }
-    // `re` / `conj` of a column with no complex source take the real path, where they are not functions: still app-only.
+    // `re` / `conj` of a real column are in the headless subset too (pinned by SetColumnValuesDialog.pipelineExport.test.tsx
+    // and the wire fixture); without the lazy module loaded they fail closed with the same pending reason.
     for (const expr of ["re(A)", "conj(A)"]) {
       const s = pipelineToPython([imported(), makeStep("expression", "Add column t", "", { name: "t", expr }), later()]);
       expect(s, expr).toContain(`NOT REPRODUCED: formula ${JSON.stringify(expr)} is evaluated only in the app`);
       expect(s, expr).not.toContain("add_formula_columns");
     }
-    const derived = pipelineToPython([imported(), makeStep("expression", "Add column t", "", { name: "t", expr: "A*2", derived: true })]);
-    expect(derived).toContain("NOT REPRODUCED: derived columns (units and error propagation)");
+    // A derived column (Set Column Values / the ƒx bar) exports with the unit the app recorded for it (lib/pipelineDerived.ts)...
+    const derived = pipelineToPython([imported(), makeStep("expression", "Add column t", "", { name: "t", expr: "A*2", derived: true, unit: "V", unitExpr: "A*2" })]);
+    expect(derived).not.toContain("NOT REPRODUCED");
+    expect(derived).toContain('formulas.append({"name": "t", "expr": "A*2", "unit": "V"})');
+    // ...and a unit-less one keeps the plain (name, expression) pair.
+    expect(pipelineToPython([imported(), makeStep("expression", "Add column t", "", { name: "t", expr: "A*2", derived: true, unit: "", unitExpr: "A*2" })])).toContain('formulas.append(("t", "A*2"))');
+    // Anything the script cannot redo stays app-only, each with its own reason (fail closed).
+    const refusals: [Record<string, unknown>, string][] = [
+      [{ propagate: true, unit: "", unitExpr: "A*2" }, "its propagated error column is evaluated only in the app (quantized.api has no error propagation)"],
+      [{}, "it was recorded before its unit was kept"],
+      [{ unit: "V", unitExpr: "A" }, "its formula was edited after the app worked out its unit"],
+    ];
+    for (const [extra, why] of refusals) {
+      const s = pipelineToPython([imported(), makeStep("expression", "Add column t", "", { name: "t", expr: "A*2", derived: true, ...extra }), later()]);
+      expect(s, why).toContain(`NOT REPRODUCED: derived column: ${why}`);
+      expect(s, why).not.toContain("add_formula_columns");
+      expect(s, why).not.toContain("qz.apply_corrections"); // the steps after it do not run
+    }
+    const fitRef = pipelineToPython([imported(), makeStep("expression", "Add column t", "", { name: "t", expr: 'fitval("Linear", "m") * A', derived: true, unit: "", unitExpr: 'fitval("Linear", "m") * A' }), later()]);
+    expect(fitRef).toContain("NOT REPRODUCED: derived column: it reads a fitted value, fit(), a snapshot of a fit held in the app");
     const frozen = pipelineToPython([imported(), makeStep("expression", "Freeze Copy of a", "", { id: "ds-9" })]);
     expect(frozen).toContain("NOT REPRODUCED: this worksheet operation has no quantized.api equivalent");
     const paste = pipelineToPython([makeStep("import", "Paste pasted data 1", 'qz.pasteData("pasted data 1")', { name: "pasted data 1" })]);
