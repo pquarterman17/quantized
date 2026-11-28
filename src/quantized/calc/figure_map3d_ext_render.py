@@ -27,6 +27,7 @@ from quantized.calc.figure_map3d import (
     set_log_zticks,
     set_view,
 )
+from quantized.calc.figure_map3d_bar_cull import BarFaces, cull_hidden_faces
 from quantized.calc.figure_map3d_bar_layout import apply_bar_layout
 from quantized.calc.figure_map3d_colour import (
     LENGTH_LABEL,
@@ -57,6 +58,7 @@ from quantized.calc.figure_map3d_scatter import (
 )
 from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_styles import figure_style
+from quantized.calc.svg_compact import compact_polygon_groups
 
 __all__ = ["figure_rc", "render_ext_figure"]
 
@@ -169,6 +171,7 @@ def render_ext_figure(
     st = figure_style(style)
     with render_scope(figure_rc(st)):
         mappable: Any = None
+        bar_faces: BarFaces | None = None
         fig = new_figure(figsize=(width_in or st.fig_width_in, height_in or st.fig_height_in))
         ax = axes_3d(fig)
         if kind == "bars3d":
@@ -190,7 +193,9 @@ def render_ext_figure(
                 if bc.codes is not None:
                     _bar_legend(ax, bc, st.font_size * 0.8)
             height_norm = Normalize(lo, hi)
-            draw_bars(ax, x, y, z, dx, dy, base, matplotlib.colormaps[cmap], height_norm, color)
+            bar_faces = draw_bars(
+                ax, x, y, z, dx, dy, base, matplotlib.colormaps[cmap], height_norm, color
+            )
             if color is not None and bc is None:
                 mappable = None  # one fixed colour: nothing for a colour bar to say
         elif kind == "scatter3d":
@@ -219,6 +224,8 @@ def render_ext_figure(
             head = float(ext.get("vec_head", 0.2))
             draw_vectors(ax, tails, tips, head, ext.get("vec_color"), rgba)
         set_view(ax, view_elev, view_azim, view_zoom)
+        if bar_faces is not None:
+            cull_hidden_faces(ax, bar_faces)
         cax = colorbar_axes(fig) if colorbar and mappable is not None else None
         title = safe_mathtext_label(title)
         z_label = safe_mathtext_label(z_label)
@@ -246,4 +253,5 @@ def render_ext_figure(
                 cb.set_ticks([k for k, _ in ticks], labels=[t for _, t in ticks])
         note_3d = safe_mathtext_label(note) if note else ""
         finish_3d(fig, ax, cax, title, st.title_font_size, note_3d, st.font_size * 0.7)
-        return savefig_bytes(fig, fmt, dpi=int(dpi) if dpi is not None else int(st.dpi))
+        out = savefig_bytes(fig, fmt, dpi=int(dpi) if dpi is not None else int(st.dpi))
+        return compact_polygon_groups(out) if fmt == "svg" and kind == "bars3d" else out
