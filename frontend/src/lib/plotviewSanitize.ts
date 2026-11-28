@@ -53,6 +53,9 @@ export interface StatMarks {
   compareControl?: string;
   /** Show the exact adjusted p beside the stars. */
   compareExact?: boolean;
+  /** Significance marks from supplied p-values (plan item 23). Held as saved; `lib/sigMarks.normalizeSig`
+   *  validates it where it is read (lazy), so the eager sanitizer stays small. */
+  sig?: unknown;
 }
 
 const STAT_MARK_VALUES: Record<string, readonly unknown[]> = {
@@ -72,6 +75,7 @@ export function sanitizeStatMarks(v: unknown): StatMarks {
     for (const k in STAT_MARK_VALUES) if (STAT_MARK_VALUES[k].includes(o[k])) out[k] = o[k];
     if (typeof o.jitterWidth === "number" && o.jitterWidth > 0 && o.jitterWidth <= 1) out.jitterWidth = o.jitterWidth;
     if (typeof o.compareControl === "string" && o.compareControl) out.compareControl = o.compareControl;
+    if (typeof o.sig === "object" && o.sig) out.sig = o.sig;
   }
   return out as StatMarks;
 }
