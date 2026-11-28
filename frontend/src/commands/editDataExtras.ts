@@ -68,6 +68,63 @@ export function buildEditDataExtras(s: StoreGet): Action[] {
       run: () => void runLazy("Loading named ranges…", () => import("../components/workshops/namedranges/openManager")).then((m) => m.openNamedRangesManager(), onLoadFailure),
     },
     {
+      id: "column-list",
+      group: "Data",
+      section: "Recalculation",
+      label: "Column list…",
+      description: "Every column of the worksheet on one page: name, unit, designation, type, formula and row count, with rename and Set As in place.",
+      keywords: "column list columns overview properties names units designation type rename set as sheet structure",
+      disabled: () => !(s().worksheetId ?? s().activeId),
+      disabledReason: "Import or select a dataset first",
+      run: () => {
+        const id = s().worksheetId ?? s().activeId;
+        if (id) void runLazy("Loading the column list…", () => import("../components/workshops/sheetstructure/openSheetStructure")).then((m) => m.openColumnList(id), onLoadFailure);
+      },
+    },
+    {
+      id: "protect-sheet",
+      group: "Data",
+      section: "Recalculation",
+      label: "Protect or unprotect sheet",
+      description: "Refuse edits, row and column changes, sorts and formula changes on the worksheet until it is unprotected, with no password.",
+      keywords: "protect unprotect lock sheet read only worksheet refuse edits password",
+      disabled: () => !(s().worksheetId ?? s().activeId),
+      disabledReason: "Import or select a dataset first",
+      run: () => {
+        const id = s().worksheetId ?? s().activeId;
+        const ds = s().datasets.find((d) => d.id === id);
+        if (id && ds) void runLazy("Loading sheet protection…", () => import("../store/sheetProtection")).then((m) => m.setSheetProtected(id, !ds.protectedSheet), onLoadFailure);
+      },
+    },
+    {
+      id: "time-series-pivot",
+      group: "Data",
+      section: "Recalculation",
+      label: "Pivot (long to wide)…",
+      description: "Reshape a time, key, value sheet into one column per key as a new worksheet, or stack columns back; repeated times are refused or combined by a rule you pick.",
+      keywords: "pivot unpivot melt reshape long wide stack columns time series key value transpose",
+      disabled: () => !(s().worksheetId ?? s().activeId),
+      disabledReason: "Import or select a dataset first",
+      run: () => {
+        const id = s().worksheetId ?? s().activeId;
+        if (id) void runLazy("Loading the pivot…", () => import("../components/workshops/sheetstructure/openSheetStructure")).then((m) => m.openPivot(id), onLoadFailure);
+      },
+    },
+    {
+      id: "insert-column-similar",
+      group: "Data",
+      section: "Recalculation",
+      label: "Insert column into similar sheets…",
+      description: "Add one column, blank or from a formula, to this worksheet and every worksheet with the same columns, as one undo step.",
+      keywords: "insert add column every all similar sheets same layout batch workbook",
+      disabled: () => !(s().worksheetId ?? s().activeId),
+      disabledReason: "Import or select a dataset first",
+      run: () => {
+        const id = s().worksheetId ?? s().activeId;
+        if (id) void runLazy("Loading the sheet tools…", () => import("../components/workshops/sheetstructure/openSheetStructure")).then((m) => m.openInsertSimilar(id), onLoadFailure);
+      },
+    },
+    {
       id: "rename-dataset",
       group: "Edit",
       label: "Rename dataset…",

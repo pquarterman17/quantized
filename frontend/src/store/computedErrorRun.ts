@@ -36,6 +36,7 @@ import { withRecomputedFormulas } from "./computedColumns";
 import { withResolved } from "./pendingEdit";
 import { useApp } from "./useApp";
 import { syncDatasetWindowDocuments } from "./windowDocuments";
+import { PROTECTED_NOTICE } from "../lib/sheetProtection";
 
 export type ErrorSource = "sqrt" | "percent" | "constant" | "sd" | "sem";
 
@@ -104,6 +105,7 @@ export async function addComputedError(
   const out = await withResolved(get, id, "adding an error column", (ds): ComputedErrorResult => {
     // A live graph's sheet is rebuilt from its sources: the column would be lost.
     if (ds.linkedCurves) return { ok: false, error: LINKED_GRAPH_EDIT_NOTICE };
+    if (ds.protectedSheet) return { ok: false, error: PROTECTED_NOTICE };
     const label = ds.data.labels[target];
     if (label === undefined || target < 0) return { ok: false, error: "pick the series the error describes" };
     const letter = channelLetter(target);

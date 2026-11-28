@@ -327,6 +327,7 @@ export function serializeWorkspace(
       ...(d.frozenCols ? { frozenCols: d.frozenCols } : {}),
       ...(d.cellRules && Object.keys(d.cellRules).length ? { cellRules: d.cellRules } : {}),
       ...(d.excludedRows?.length ? { excludedRows: d.excludedRows } : {}),
+      ...(d.protectedSheet ? { protectedSheet: true } : {}),
       ...(d.filter?.length ? { filter: d.filter } : {}),
       ...(d.rowStyle ? { rowStyle: d.rowStyle } : {}),
       fitSpec: d.fitSpec,

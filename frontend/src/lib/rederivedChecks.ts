@@ -7,16 +7,20 @@
 // architecture.test.ts ("re-exported lazy half") keeps eager modules off it.
 
 import { LINKED_GRAPH_EDIT_NOTICE } from "./rederived";
+import { PROTECTED_NOTICE } from "./sheetProtection";
 import type { Dataset } from "./types";
 
 export const REDERIVED_EDIT_NOTICE =
   "This dataset is recomputed from its source; edit the raw data or reset corrections first.";
 
-export function isRederived(ds: Pick<Dataset, "derivedFrom" | "corrections" | "raw" | "linkedCurves">): boolean {
-  return ds.linkedCurves != null || ds.derivedFrom != null || (ds.corrections != null && ds.raw != null);
+// A PROTECTED sheet (lib/sheetProtection.ts) refuses exactly what a re-derived one does, so every edit path
+// that already asks this question refuses a protected sheet too, with its own reason.
+export function isRederived(ds: Pick<Dataset, "derivedFrom" | "corrections" | "raw" | "linkedCurves" | "protectedSheet">): boolean {
+  return ds.protectedSheet === true || ds.linkedCurves != null || ds.derivedFrom != null || (ds.corrections != null && ds.raw != null);
 }
 
 /** The refusal text for a dataset `isRederived` says can't take data edits. */
-export function editRefusalNotice(ds: Pick<Dataset, "linkedCurves">): string {
+export function editRefusalNotice(ds: Pick<Dataset, "linkedCurves" | "protectedSheet">): string {
+  if (ds.protectedSheet === true) return PROTECTED_NOTICE;
   return ds.linkedCurves != null ? LINKED_GRAPH_EDIT_NOTICE : REDERIVED_EDIT_NOTICE;
 }
