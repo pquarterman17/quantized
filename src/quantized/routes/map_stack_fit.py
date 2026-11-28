@@ -63,11 +63,14 @@ def stack_fit_job(req: StackFitRequest) -> dict[str, Any]:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     def run_job(progress: ProgressFn, abort_check: AbortFn) -> Any:
-        res = map_stack_fit.fit_map_stack(
-            grids, req.x_values, req.model, p0=req.p0, lower=req.lower, upper=req.upper,
-            fixed=req.fixed, keep_unconverged=req.keep_unconverged,
-            progress=progress, abort_check=abort_check,
-        )
+        try:
+            res = map_stack_fit.fit_map_stack(
+                grids, req.x_values, req.model, p0=req.p0, lower=req.lower, upper=req.upper,
+                fixed=req.fixed, keep_unconverged=req.keep_unconverged,
+                progress=progress, abort_check=abort_check,
+            )
+        except map_stack_fit.StackFitCancelled:
+            return None  # the abort flag is set: the runner ends the job "cancelled", no result
         maps = map_stack_fit.result_maps(res, req.layer_names, req.x_values, req.x_label)
         return {
             "outputs": [

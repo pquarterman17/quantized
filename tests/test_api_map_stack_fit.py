@@ -3,6 +3,7 @@ fit runs through the job queue, and a cancel leaves no result."""
 
 from __future__ import annotations
 
+import threading
 import time
 from typing import Any
 
@@ -84,16 +85,20 @@ def test_a_job_level_refusal_surfaces_as_a_job_error() -> None:
 
 def test_cancel_ends_cancelled_and_leaves_no_result(monkeypatch: pytest.MonkeyPatch) -> None:
     real = map_stack_fit.curve_fit
+    started = threading.Event()
+    go = threading.Event()
 
-    def slow(*a: Any, **k: Any) -> Any:
-        time.sleep(0.02)
+    def gated(*a: Any, **k: Any) -> Any:
+        started.set()
+        assert go.wait(30)  # hold the first pixel until the cancel has been posted
         return real(*a, **k)
 
-    monkeypatch.setattr(map_stack_fit, "curve_fit", slow)
+    monkeypatch.setattr(map_stack_fit, "curve_fit", gated)
     r = client.post(URL, json=_body())
     job_id = r.json()["job_id"]
-    time.sleep(0.1)
+    assert started.wait(30)
     assert client.post(f"/api/jobs/{job_id}/cancel").status_code == 200
+    go.set()
     snaps = _poll(job_id)
     assert snaps[-1]["status"] == "cancelled"
     assert client.get(f"/api/jobs/{job_id}/result").status_code == 409

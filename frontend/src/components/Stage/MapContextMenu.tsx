@@ -38,6 +38,7 @@ export default function MapContextMenu({ x, y, datasetId, canvas, cmap, logZ, co
   const setStatus = useApp((s) => s.setStatus);
   const items: ContextMenuItem[] = [
     { label: "Map operations…", run: () => useAnalysisExtras.getState().show("map-ops") },
+    { label: "Fit a map stack…", run: () => useAnalysisExtras.getState().show("map-stack-fit") },
     {
       label: "ROI cuts…",
       run: () => setRoiCutsOpen(true),
