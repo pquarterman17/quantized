@@ -9,6 +9,7 @@ import { useState } from "react";
 import { DEFAULT_SIG_LEVELS, levelsProblem, type SigLevel, type SigMarks } from "../../lib/sigMarks";
 import type { StatMarks } from "../../lib/statMarks";
 import { isCategoricalChannel } from "../../lib/categorical";
+import { groupColumns } from "../../lib/sigGroupColumns";
 import { useApp } from "../../store/useApp";
 import { Select } from "../primitives";
 import { Checkbox } from "../primitives/Checkbox";
@@ -85,6 +86,7 @@ export default function StatSigControls({ sig, setMarks, error }: Props) {
     { value: "-1", label: "pick…" },
     ...cols.flatMap((l, c) => (want(c) ? [{ value: String(c), label: l }] : [])),
   ];
+  const groupOptions = [{ value: "-1", label: "pick…" }, ...(sheet ? groupColumns(sheet.data).map((g) => ({ value: String(g.key), label: g.label })) : [])];
   const setSheet = (f: Partial<Extract<SigMarks["source"], { kind: "sheet" }>>) =>
     s?.kind === "sheet" && patch({ source: { ...s, ...f } }, "set p-value columns");
   return (
@@ -116,10 +118,10 @@ export default function StatSigControls({ sig, setMarks, error }: Props) {
           {sheet && (
             <>
               <Pick label="group A">
-                <Select aria-label="group A column" options={colOptions((c) => !!sheet && isCategoricalChannel(sheet.data, c))} value={String(s.a)} onChange={(e) => setSheet({ a: Number(e.target.value) })} />
+                <Select aria-label="group A column" options={groupOptions} value={String(s.a)} onChange={(e) => setSheet({ a: Number(e.target.value) })} />
               </Pick>
               <Pick label="group B">
-                <Select aria-label="group B column" options={colOptions((c) => !!sheet && isCategoricalChannel(sheet.data, c))} value={String(s.b)} onChange={(e) => setSheet({ b: Number(e.target.value) })} />
+                <Select aria-label="group B column" options={groupOptions} value={String(s.b)} onChange={(e) => setSheet({ b: Number(e.target.value) })} />
               </Pick>
               <Pick label="p">
                 <Select aria-label="p-value column" options={colOptions((c) => !!sheet && !isCategoricalChannel(sheet.data, c))} value={String(s.p)} onChange={(e) => setSheet({ p: Number(e.target.value) })} />
