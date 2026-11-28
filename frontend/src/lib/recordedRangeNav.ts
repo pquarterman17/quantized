@@ -13,7 +13,10 @@
 import type { AnalysisResult } from "./analysisResult";
 import { isSnapshotResult, snapshotResultState, sourcesFingerprint } from "./analysisResultFreshness";
 import { readOutputRowRanges, readRecordedRowRange, ROW_RANGE_PARAM, recordedRowRangeLabel, type RecordedRowRange } from "./inputRowRange";
-import { rowRangeLabel } from "./rowRange";
+import { rangeChangeNotes } from "./namedRangeResultFreshness";
+import { currentNamedRanges } from "./namedRangeSource";
+import { resolveRangeLink } from "./rangeLink";
+import { rowRangeLabel, type RowRange } from "./rowRange";
 import type { Dataset } from "./types";
 
 export interface RecordedRangeTarget extends RecordedRowRange {
@@ -34,20 +37,36 @@ export function recordedRowsCurrent(result: AnalysisResult, datasets: readonly D
   if (isSnapshotResult(result)) return snapshotResultState(result, datasets) === "current";
   if (result.stale || !result.sourceFingerprint) return false;
   const now = sourcesFingerprint(result, new Map(datasets.map((d) => [d.id, d])));
-  return now !== null && now === result.sourceFingerprint;
+  // A named range it read moved (a retarget changes no data): not the rows it read, whatever the fingerprint says.
+  return now !== null && now === result.sourceFingerprint && rangeChangeNotes(result, datasets).length === 0;
 }
 
 export type RecordedRangePlan =
-  | { ok: true; datasetId: string; sourceName: string; rows: number[]; range: RecordedRowRange; label: string }
+  | {
+      ok: true; datasetId: string; sourceName: string; rows: number[]; range: RecordedRowRange; label: string;
+      /** Set when the plan follows the NAMED range live (its current rows) instead of the recorded rows: the result
+       *  is out of date, and the range it read is still readable on its source. Only Reopen in tool asks for it. */
+      link?: RowRange;
+    }
   | { ok: false; datasetId: string; reason: string };
 
 /** The rows to select for one recorded range, or why not. `current` is `recordedRowsCurrent`. */
-export function planRecordedRange(target: RecordedRangeTarget, datasets: readonly Dataset[], current: boolean): RecordedRangePlan {
+export function planRecordedRange(target: RecordedRangeTarget, datasets: readonly Dataset[], current: boolean, followLive = false): RecordedRangePlan {
   const source = datasets.find((d) => d.id === target.datasetId);
   const no = (reason: string): RecordedRangePlan => ({ ok: false, datasetId: target.datasetId, reason });
   const saved = recordedRowRangeLabel(target);
   if (!source) return no(`The source worksheet no longer exists, so ${saved} cannot be selected.`);
   if (source.pending) return no(`“${source.name}” is still loading: open it, then try again.`);
+  // A result that read a NAMED range and is out of date (the range moved, or the data did) reopens on the range as it
+  // is NOW, following it live, when it is still readable on the source: "Reopen in tool" then re-runs on the range's
+  // current rows. Never matched by name: the recorded id, and only that range. Otherwise, as before, it is refused.
+  const live = followLive && !current && target.rangeId ? resolveRangeLink(target.rangeId, source.id, currentNamedRanges(), datasets) : null;
+  if (live && live.refused === undefined) {
+    const list = Array.from({ length: live.to - live.from + 1 }, (_, i) => live.from + i);
+    const now = source.data.time.length;
+    const range: RecordedRowRange = { from: live.from, to: live.to, rows: now, ...(live.namedAs ? { name: live.namedAs } : {}), rangeId: target.rangeId };
+    return { ok: true, datasetId: source.id, sourceName: source.name, rows: list, range, label: `${rowRangeLabel(live)} of ${now.toLocaleString()}`, link: live };
+  }
   if (!current) return no(`“${source.name}” has changed since this result was saved, so ${saved} may now be other rows. Run the analysis again to select its rows.`);
   const rows = source.data.time.length;
   if (rows !== target.rows || target.to >= rows) {
@@ -58,9 +77,9 @@ export function planRecordedRange(target: RecordedRangeTarget, datasets: readonl
 }
 
 /** One plan per recorded range of `result`. */
-export function planRecordedRanges(result: AnalysisResult, outputMetadata: Readonly<Record<string, unknown>> | undefined, datasets: readonly Dataset[]): RecordedRangePlan[] {
+export function planRecordedRanges(result: AnalysisResult, outputMetadata: Readonly<Record<string, unknown>> | undefined, datasets: readonly Dataset[], followLive = false): RecordedRangePlan[] {
   const targets = recordedRangeTargets(result, outputMetadata);
   if (!targets.length) return [];
   const current = recordedRowsCurrent(result, datasets);
-  return targets.map((t) => planRecordedRange(t, datasets, current));
+  return targets.map((t) => planRecordedRange(t, datasets, current, followLive));
 }

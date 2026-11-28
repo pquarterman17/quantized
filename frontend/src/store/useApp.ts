@@ -290,7 +290,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createRoiCutsPanelSlice(set),
   ...createWorkbookActionsSlice(set, get),
   ...createCollectionsSlice(set, get),
-  ...createPersistedViewStateSlice(set),
+  ...createPersistedViewStateSlice(set, get),
   ...createSampleProfilesSlice(set, get),
   ...createWorkbookCombineSlice(set, get),
   ...createWorkbookSeparateSlice(set, get),

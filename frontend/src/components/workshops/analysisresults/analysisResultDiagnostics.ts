@@ -1,5 +1,5 @@
 import type { AnalysisResult } from "../../../lib/analysisResult";
-import { snapshotResultDiagnostics, type SnapshotResultState } from "../../../lib/analysisResultFreshness";
+import { snapshotDataOutOfDate, snapshotResultDiagnostics, type SnapshotResultState } from "../../../lib/analysisResultFreshness";
 import { fitAnalysisResult } from "../../../lib/fitAnalysisResultLive";
 import { peakTableMatchesData } from "../../../lib/peakTableFit";
 import { isReflFitCatalogEntry } from "../../../lib/reflFitAnalysisResult";
@@ -29,13 +29,16 @@ export interface AnalysisResultDiagnosticsInput {
   /** The referenced fit / peak / reflectivity record is not the one the envelope
    *  recorded (lib/resultInputsRecord.ts): the panel withholds it. Default false. */
   recordChanged?: boolean;
+  /** The named ranges this result read that have moved (lib/namedRangeResultFreshness.ts `rangeChangeNotes`); the panel
+   *  computes them against the live ranges. Default: none. */
+  rangeNotes?: readonly string[];
 }
 
 /** The result workspace's Diagnostics list: live producer warnings plus
  *  missing/stale reference notes, de-duplicated. Pure; the panel memoizes it. */
 export function analysisResultDiagnostics({
   result, datasets, source, output, staleDatasets, staleFits, isPeak, isFit, isRefl,
-  peakTable, fitSpec, fitFingerprintStale, reflFit, reflIssues, snapshotState, recordChanged = false,
+  peakTable, fitSpec, fitFingerprintStale, reflFit, reflIssues, snapshotState, recordChanged = false, rangeNotes = [],
 }: AnalysisResultDiagnosticsInput): string[] {
   // A multi-output result (reflectivity curves / bands) is out of date when ANY output is.
   // outputs[0] may be the deleted one: any present output carries the message.
@@ -71,6 +74,7 @@ export function analysisResultDiagnostics({
     ...(isRefl && !reflFit && !recordChanged
       ? [isReflFitCatalogEntry(result) ? "The saved reflectivity fit record is missing from its source worksheets." : REFL_RECORD_TRIMMED]
       : []),
-    ...(snapshotState ? snapshotResultDiagnostics(result, snapshotState) : []),
+    ...(snapshotState ? snapshotResultDiagnostics(result, snapshotState, rangeNotes.length > 0 && !snapshotDataOutOfDate(result, datasets)) : []),
+    ...rangeNotes,
   ])];
 }

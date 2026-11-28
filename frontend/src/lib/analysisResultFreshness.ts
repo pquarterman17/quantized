@@ -17,6 +17,7 @@ import type { AnalysisResult } from "./analysisResult";
 import { isCommittedOutputResult } from "./committedOutputGraph";
 import { dataFingerprint } from "./dataFingerprint";
 import { DOE_DESIGN_RESULT, PROFILER_RESULT, TOOL_RESULT_NOUN, TOOL_RESULT_PRODUCERS, doeDesignFingerprint, doeDesignRecipe, profilerFitState } from "./toolResultKinds";
+import { rangeChangeNotes } from "./namedRangeResultFreshness";
 import { peakTableMatchesData } from "./peakTableFreshness";
 import { analysisData } from "./rowstate";
 import type { Dataset } from "./types";
@@ -132,7 +133,7 @@ export function snapshotResultState(
   return datasetSnapshotState(result, datasets);
 }
 
-function datasetSnapshotState(result: AnalysisResult, datasets: readonly Dataset[]): SnapshotResultState {
+function datasetSnapshotState(result: AnalysisResult, datasets: readonly Dataset[], withRanges = true): SnapshotResultState {
   if (snapshotResultSourceless(result) && result.sources.length === 0) {
     return result.stale ? "out-of-date" : "current";
   }
@@ -143,6 +144,8 @@ function datasetSnapshotState(result: AnalysisResult, datasets: readonly Dataset
   if (result.stale || !result.sourceFingerprint) return "out-of-date";
   const now = sources.map((dataset) => snapshotFingerprint(result, dataset!)).join(":");
   if (now !== result.sourceFingerprint) return "out-of-date";
+  // A named range it read moved (a retarget changes no data, so the fingerprint cannot see it).
+  if (withRanges && rangeChangeNotes(result, datasets).length) return "out-of-date";
   if (result.producer.id === "williamson-hall" && !williamsonHallPeakBindingMatches(result, sources[0]!)) {
     return "out-of-date";
   }
@@ -152,13 +155,20 @@ function datasetSnapshotState(result: AnalysisResult, datasets: readonly Dataset
   return "current";
 }
 
+/** Is the result's source data (or, for a Williamson-Hall result, its peak table) different from what it was saved
+ *  on? Unlike `snapshotResultState` it ignores a named range that moved, so the panel can say which of the two it is. */
+export const snapshotDataOutOfDate = (result: AnalysisResult, datasets: readonly Dataset[]): boolean =>
+  datasetSnapshotState(result, datasets, false) === "out-of-date";
+
 export const SNAPSHOT_RESULT_STATUS: Readonly<Record<SnapshotResultState, string>> = {
   "current": "Current", "out-of-date": "Out of date", "pending": "Pending", "source-missing": "Source missing",
 };
 
 /** Diagnostics for a non-current snapshot. A present-but-deleted source is
  *  already reported generically by its reference, so it adds nothing here. */
-export function snapshotResultDiagnostics(result: AnalysisResult, state: SnapshotResultState): string[] {
+export function snapshotResultDiagnostics(result: AnalysisResult, state: SnapshotResultState, rangeOnly = false): string[] {
+  // The source data is as saved: only a named range moved, which `rangeChangeNotes` says (the panel adds it).
+  if (rangeOnly && state === "out-of-date") return [];
   const kindNoun = TOOL_RESULT_NOUN[result.producer.id];
   if (kindNoun) return toolResultDiagnostics(result, state, kindNoun);
   const noun = result.producer.id === "distribution-analysis" ? "distribution analysis"

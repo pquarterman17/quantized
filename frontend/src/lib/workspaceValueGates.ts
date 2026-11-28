@@ -18,7 +18,9 @@ export const groupShapesOn = (o: Obj): boolean => !!o.centroid || !!o.hull || (i
 /** A saved result that records the row range its tool read (OG20, `lib/inputRowRange.ts`):
  *  `analysisResults[].parameters.rowRange`. MEASURED by reading v0.45.0's `analysisResult.ts`: its `parameters`
  *  sanitizer keeps any nested JSON, so the key is not dropped, but v0.45.0 would show the result with no sign of
- *  the window and save it under the unranged duplicate key. The owner chose a gated key, so it is v9. */
+ *  the window and save it under the unranged duplicate key. The owner chose a gated key, so it is v9. The nested
+ *  `rangeId` (the named range it read, lib/namedRangeResultFreshness.ts) needs no rung of its own: it only exists under
+ *  this key, and under `INPUT_ROW_RANGE_KEY` (a gated metadata key), so no file a release below v9 reads can hold one. */
 export const RESULT_ROW_RANGE = "AnalysisResult.parameters.rowRange";
 
 export function checkResultRange(result: unknown, found: Set<string>): void {
