@@ -30,6 +30,16 @@ export function sheetViewItems({ ds, showFormulas, toggleFormulas }: SheetViewCo
       run: () => void runLazy("Loading the column list…", () => import("../../workshops/sheetstructure/openSheetStructure")).then((m) => m.openColumnList(ds.id), onLoadFailure),
     },
     {
+      label: "Pivot…",
+      title: "Reshape between long (time, key, value) and wide (a column per key) as a new worksheet",
+      run: () => void runLazy("Loading the pivot…", () => import("../../workshops/sheetstructure/openSheetStructure")).then((m) => m.openPivot(ds.id), onLoadFailure),
+    },
+    {
+      label: "Insert column into similar sheets…",
+      title: "Add one column to this sheet and every sheet with the same columns, as one undo step",
+      run: () => void runLazy("Loading the sheet tools…", () => import("../../workshops/sheetstructure/openSheetStructure")).then((m) => m.openInsertSimilar(ds.id), onLoadFailure),
+    },
+    {
       label: ds.protectedSheet ? "Unprotect sheet" : "Protect sheet",
       title: ds.protectedSheet ? PROTECTED_NOTICE : "Refuse cell edits, row and column changes, sorts and formula changes until unprotected (no password; viewing, copying, plotting and analysis stay allowed)",
       run: () => void runLazy("Loading sheet protection…", () => import("../../../store/sheetProtection")).then((m) => m.setSheetProtected(ds.id, !ds.protectedSheet), onLoadFailure),

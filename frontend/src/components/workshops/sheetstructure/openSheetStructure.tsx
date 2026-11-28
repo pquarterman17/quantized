@@ -7,6 +7,8 @@ import type { ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
 import ColumnList from "./ColumnList";
+import InsertSimilarDialog from "./InsertSimilarDialog";
+import PivotDialog from "./PivotDialog";
 
 const hosts = new Map<string, { root: Root; el: HTMLDivElement }>();
 
@@ -32,6 +34,14 @@ function show(kind: string, view: (onClose: () => void) => ReactElement): void {
 
 export function openColumnList(datasetId: string): void {
   show("column-list", (onClose) => <ColumnList datasetId={datasetId} onClose={onClose} />);
+}
+
+export function openPivot(datasetId: string): void {
+  show("pivot", (onClose) => <PivotDialog datasetId={datasetId} onClose={onClose} />);
+}
+
+export function openInsertSimilar(datasetId: string): void {
+  show("insert-similar", (onClose) => <InsertSimilarDialog datasetId={datasetId} onClose={onClose} />);
 }
 
 export function closeSheetStructure(kind: string): void {
