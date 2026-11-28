@@ -13,7 +13,7 @@ evidence stays in the appendix `ORIGIN_STUDENT_GAP_FINDINGS.md`.
 **Contracts:** `ROW_RANGE_CONTRACT.md` (items 31, 34) and `PRESET_BAR_CONTRACT.md` (item 40), both accepted 2026-11-26
 **Related:** `SCIENTIFIC_WORKBENCH_REPLACEMENT_PLAN.md` (cross-product journeys and acceptance criteria; its criteria for items 31, 34, 43, 44 and 47 are booked on those items)
 **Created:** 2026-11-25
-**Updated:** 2026-11-28 (wave 16: #1186–#1195 merged; items 13, 35, 40 and 50 complete; 29 items open; lanes for items 6, 7, 10, 11 and 23 and acceptance pass 10 running; owner gate OG22 open; OG15 and OG23 to revisit)
+**Updated:** 2026-11-28 (wave 16: #1186–#1202 merged, main green at `00ad51d75`; items 7, 10, 11, 13, 23, 35, 40 and 50 complete; 25 items open; #1203 (item 21) in CI; lanes for items 31 and 34 and the pass 10 fixes running; owner gate OG22 open; OG15 and OG23 to revisit)
 **Baseline:** `origin/main` at `0f4b7bac0` (v0.45.0 + #1032)
 
 ---
@@ -352,7 +352,7 @@ means that answer. Open:
 
 ## Cross-cutting priorities
 
-The "start here" view: the open work worth doing next, ungated. Items 2, 3, 4, 5, 13, 17, 18, 25, 28, 29, 32, 35, 37, 38, 40, 43 and 50
+The "start here" view: the open work worth doing next, ungated. Items 2, 3, 4, 5, 7, 10, 11, 13, 17, 18, 23, 25, 28, 29, 32, 35, 37, 38, 40, 43 and 50
 are complete; the others shipped their main part and keep the sub-tasks listed under each item.
 
 | # | Item | Workstream | Why first | Model |
@@ -388,16 +388,9 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
    - [x] PyWavelets as an optional, import-guarded `[wavelets]` extra (#1095)
    - [x] CWT, DWT, reconstruct from levels, wavelet smooth and denoise (#1095). DWT with zero padding, IDWT and CWT (`gaus2` exactly, `mexh` within 3%) agree with Origin (#1094); Origin's `periodic` mode is a rolled periodization, so only level 1 and Haar match `wavedec`
    - [x] Installer decision (owner, 2026-11-26): the installer stays lean while the app is in development; bundling `[wavelets]` and the other extras is item 49, much later
-   - [ ] Origin's `wtdenoise` (sqtwolog) and `wtsmooth` were not reproduced, and the CWT normalisation is not pinned
-   - [ ] 2-D wavelet on maps (GAP_AUDIT_9 G22 residue)
-
-7. **Signal extras** — coherence, phase unwrap, anti-alias decimation, local-extrema envelope, percentile and binomial smoothing, Zoom FFT, power-spectral-density options.
-   - Model: **Claude Haiku 5.5** (alt ChatGPT Luna), following the existing `run_signal_op` dispatch; Sonnet review. Size M. Oracle: yes for most.
-   - Source: A4, F, G.
-   - [x] Coherence, phase unwrap, anti-alias decimation, envelope, percentile and binomial smoothing, Zoom FFT (#1048)
-   - [x] PSD power ("spectrum") scaling (#1062)
-   - [x] Power scaling on the plot's FFT gadget (#1076); quantized's density and spectrum scalings match Origin's TISA and MSA to 1e-12 (#1088)
-   - [ ] Older releases ignore the new nested recipe fields (`psdScaling`, and item 3's integrate-only baseline), so such a recipe re-runs with the old default there; nested recipe fields have no forward-compat map yet
+   - [x] Origin's conventions as options, defaults unchanged: the `origin-periodic` edge extension, a "percent of largest detail" denoise rule and a smooth cutoff, matching the frozen Origin cases to 1e-10; the CWT normalisation is pinned (L2, s^-1/2, scale in samples) and the 3% `mexh` gap is sampling and edge truncation, not normalisation (#1199)
+   - [ ] Origin's `wtdenoise` sqtwolog: hard thresholding with one global threshold, but its noise sigma is unidentified (several fit the frozen cases; MAD of the finest level is excluded). The evidence is a realdata test; nothing guessed
+   - [x] 2-D wavelet denoise and smooth on maps, a new linked map dataset, against `wavedec2` / `waverec2`; threshold 0 round-trips to 1e-12 (#1199)
 
 9. **Fit-function library port** — bring Origin's remaining general built-in models into the registry from the install's FDF definitions. *Opened 2026-11-26 (OG2): general families first.*
    - Model: contract and generator by **Claude Sonnet 5.5**; bulk conversion and per-function tests by **Claude Haiku 5.5** (alt ChatGPT Luna). Size L. Oracle: yes (Origin's own fit per function).
@@ -414,22 +407,6 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
    - [ ] Map an imported `.opju` fit's function name to the registry (no importer reads fit-function names today)
    - [ ] Registry mismatches with Origin: `Sine` orders its parameters (xc, w, A, y0) against Origin's (y0, xc, w, A); `ExpGrow2` lacks Origin's t1, t2 > 0 bounds
    - [ ] Implicit (diode, solar cell) and surface families, on demand only (OG2)
-
-10. **General 2D map analysis** — peak finding and 2D peak fitting on any map (today RSM only), plus volume integration over a drawn ROI.
-    - Model: **Claude Sonnet 5.5**. Size M. Oracle: yes (`integ2`).
-    - Source: A5, F (`calc/rsm_analyze.py` is Partial).
-    - [x] 2D peak fits and ROI volume on any map (#1052)
-    - [ ] Polygon ROI in the UI (the calc and route accept polygons; the ROI store holds rectangles only)
-    - [x] Draw the box on maps other than RSM (#1064; it cannot drive box cuts or be saved as a named ROI, whose file format knows only the two RSM spaces)
-    - [x] Compare volumes with Origin's `integ2` (#1060: the pixel-cell default is 3.6% above `integ2`'s trapezoid rule; #1065 added the trapezoid rule as an option, which matches to 1e-12)
-
-11. **Clustering** — k-means and hierarchical clustering with a dendrogram. *Opened 2026-11-26 (OG4).*
-    - Model: **Claude Sonnet 5.5** for the backend, **ChatGPT Terra high** for the dendrogram view. Size M. Oracle: yes (`kmeans`, `hcluster`).
-    - Source: A6; JMP_GAP_PLAN J13.
-    - [x] Origin fixtures for `kmeans` and `hcluster` (#1094)
-    - [x] k-means and hierarchical clustering with stated scaling, seed and cutoff; labels commit linked to the source rows; 20 Origin comparisons pass (#1089)
-    - [x] A dendrogram view, matched on screen and in export (#1089)
-    - [ ] Remainders: user-specified initial centres in the UI, variable clustering, squared-Euclidean and cosine distances, a result-book section; the k = 5 default-start case misses Origin because Origin's default starting rows are unidentified
 
 ### Tier 3 — Nice-to-Have
 
@@ -536,14 +513,6 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
     - [x] Scrolling on reciprocal (in 1/x), Y2 and exchanged axes (#1154)
     - [ ] Scrolling on probability and Y3+ axes; the box filter on turned and multi-panel plots; a typed legend carried to the next column in a group step
 
-23. **Annotation tools** — slope annotation, angle and distance measures, scale-bar objects, heatmap cell labels and significance marks.
-    - Model: **ChatGPT Terra high** (alt Claude Sonnet 5.5). Size M.
-    - Source: E, G, H1.
-    - [x] Slope, distance, angle and scale-bar shapes; heatmap cell labels (#1055)
-    - [ ] Significance marks (need a choice of p-value column)
-    - [x] A scale bar on the 2-D map stage, auto length near 20 % of the axis, screen and export pinned by `map_scalebar.json`, gated at v9 (#1177)
-    - [x] An opt-in arc on the angle measure, off by default so existing exports stay byte-identical (#1177)
-
 24. **Plot Details residue** — text or letter symbols, subset centroid with hull or ellipse, subgroup increments, equal-aspect XY layers, total labels on stacks, anchor ticks, XY errors drawn as rectangles.
     - Model: **Claude Sonnet 5.5**. Size M.
     - Source: G, H1.
@@ -595,8 +564,8 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
     - [x] Special, engineering, data and lookup functions (#1063: 33 element-wise names mirrored in the headless exporter against one shared fixture; lookups are app-only)
     - [x] Complex numbers inside formulas: `complex`, `polar`, imaginary literals, `re`/`im`/`abs`/`arg`/`conj` and the complex elementary functions; cells stay real, a complex result is an error unless reduced, and Set Column Values writes both parts as two columns; real formulas unchanged; app-only (#1155; design in `plans/COMPLEX_FORMULA_CONTRACT.md`, which the code cites)
     - [x] Complex formulas in exported scripts: the headless evaluator runs the C1–C6 subset, pinned by a 159-case wire fixture and a script round trip; the re / im pair from Set Column Values is marked and offers Argand and Nyquist plots from its column menu (#1190)
-    - [ ] Set Column Values and ƒx-bar columns record `derived: true`, which the exporter has always marked NOT REPRODUCED, so dialog columns, complex or real, do not export yet. A derived column without error propagation could export as a formula step; its unit label needs a choice (carry it, or a comment)
-    - [ ] `re(A)` / `conj(A)` of a column with no complex source stay app-only in scripts; the Argand / Nyquist entries are in the column menu only (no palette or Plot-menu entry)
+    - [x] Set Column Values and ƒx-bar columns export as formula steps with their unit (`add_formula_columns` with a unit); propagated errors, `fit()` references, steps recorded before #1202 and edited derived steps stay NOT REPRODUCED, each with its reason (#1202)
+    - [x] `re`, `im`, `conj`, `abs` and `arg` of a real column already matched the app headlessly (the earlier refusal was a test that never loaded the lazy module), now pinned in the shared fixture; Argand and Nyquist in the palette and the Plot menu (#1202)
     - [ ] Signal-processing functions in formulas
     - [x] `beta` / `lbeta` for negative non-integer arguments follow scipy (reflection; poles as scipy), in the app and the headless mirror against the shared fixture (#1168)
     - [x] Reopening a `let` formula over a row range shows the text as typed (#1168)
@@ -673,6 +642,10 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
 
 ## Completed
 
+- ~~**#7 Signal extras**~~ (2026-11-28, #1048, #1062, #1076, #1088, #1198) — coherence, phase unwrap, anti-alias decimation, envelope, percentile and binomial smoothing, Zoom FFT and PSD scalings matching Origin's TISA and MSA; nested recipe fields now have a typed forward-compat map (`lib/workspaceRecipeCompat.ts`), so an unclassified field fails the type check. `psdScaling` and off-default Distribution CI settings gate at v9; the integrate-only baseline never reaches a `.dwk`. The CI gating is conservative (v0.45.0 has no CI table), so `safe-drop` is a defensible alternative.
+- ~~**#10 General 2D map analysis**~~ (2026-11-28, #1052, #1060, #1064, #1065, #1197) — 2-D peak fits and ROI volume on any map, the box on any map, the trapezoid rule matching Origin's `integ2`, and polygon ROIs drawn, edited and saved (volume against an independent mask; consumers that cannot take a polygon refuse). Not done: polygons in named ROI files, insert-vertex and whole-polygon moves, polygons in a captured analysis selection.
+- ~~**#11 Clustering**~~ (2026-11-28, #1089, #1094, #1200) — k-means and hierarchical clustering with a dendrogram, user-given starting centres (equal to sklearn, `kmeans2` and a hand Lloyd loop), squared-Euclidean and cosine distances (Ward stays Euclidean), variable clustering by 1 − |r| or 1 − r, and a Result book section with reopen. The Origin k = 5 default-start case still misses even with Origin's recorded centres; its strict xfail stays.
+- ~~**#23 Annotation tools**~~ (2026-11-28, #1201 and earlier) — slope annotation, angle and distance measures, scale-bar objects, heatmap cell labels, and significance marks from a saved post-hoc result or three worksheet columns, with editable thresholds, "show p" and "show ns", the same layout on screen and in export, gated at v9. Not done: Dunnett as a source (its table does not record the control), staleness of the source result, faceted plots and stacked bars.
 - ~~**#50 One editor per plot object**~~ (2026-11-28, #1187, #1188, #1189, #1194; contract `OBJECT_EDITOR_CONTRACT.md`, OG23) — the double-click popup is the only editor for an axis, a curve and the legend: the Axis popup gained the title, Y2 "Same as Y" and the X date modes; Plot details became a tabbed curve editor over one draft; an outside click on an edited popup asks before discarding; the right panel names the selection with Edit… and keeps plot-wide settings, with X / Y / Y2 / Y3+ launchers. Reversible: one switch (`lib/objectEditorMode.ts`) and a reversal ledger in the contract. Not done: a channel that is not plotted cannot have its curve style edited.
 - ~~**#40 Preset bar on every tool**~~ (2026-11-28, #1104, #1124, #1160, #1169, #1170, #1176, #1178, #1181, #1184, #1191) — named settings and last-used values on every analysis tool the plan lists (26 tools), with export and import, the Recipe Library listing, the hidden-field rule and one option list per tool. #1191 also stopped Optical gap overwriting a preset's unit and signal. Judgement calls in #1191: Surface fit stores no start values or bounds; SIMS Region writes last used on export.
 - ~~**#13 Math extras**~~ (2026-11-28, #1059, #1076, #1088, #1192) — areas, trace and scattered interpolation, B-spline resampling, map correlation with "subtract means" (off equals Origin's `corr2`; the strict xfail became a passing test) and a local normalisation over the overlap, a root and minimum solver with systems of equations and equality / inequality constraints (SLSQP or trust-constr, active constraints named). The local window is the per-offset overlap, not a drawn region.
