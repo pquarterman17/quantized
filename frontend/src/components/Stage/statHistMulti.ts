@@ -83,9 +83,10 @@ export async function computeGroupHistogramDraw(
   groups: readonly GroupSpec[],
   bins: string,
   valueLabel: string,
+  min = 2,
 ): Promise<StatDrawData> {
   const kept = groups.filter((g) => g.values.length > 0);
-  if (kept.length < 2) throw new Error('splitting a histogram needs at least 2 "group by" levels with a finite value');
+  if (kept.length < min) throw new Error(min > 1 ? 'splitting a histogram needs at least 2 "group by" levels with a finite value' : "need ≥ 1 finite value");
   const r = (await statsHistogramMulti(kept.map((g) => g.values), bins)) as unknown as {
     edges: number[];
     series: { counts: number[] }[];
@@ -95,6 +96,13 @@ export async function computeGroupHistogramDraw(
     mode: "histogram", edges: r.edges.map(Number), counts: series[0].counts, series, density: false, valueLabel,
     values: kept.map((g) => g.values),
   };
+}
+
+/** The stacked-bars part of a histogram export: the `stack` option (and `percent`, which also
+ *  retitles the count axis), or nothing for a draw that is not stacked. */
+export function stackWire(draw: StatDrawData | null): Partial<StatplotFigureSpec> {
+  if (draw?.mode !== "histogram" || !draw.stack) return {};
+  return draw.percent ? { dist3: { type: "stack", stack: true, percent: true }, y_label: "percent" } : { dist3: { type: "stack", stack: true } };
 }
 
 /** The export request of a group-split histogram draw (null for any other draw). */

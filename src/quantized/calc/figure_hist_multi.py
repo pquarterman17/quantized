@@ -2,8 +2,9 @@
 ``Stage/statHistMulti.ts`` + ``statRenderHist.ts``): several columns binned on
 shared edges (``calc.statplots.histogram_multi``), each drawn as translucent
 bars in its own palette colour (alpha 0.45, opaque edge, like the canvas)
-with a legend of the column names. ``stack`` stacks the series
-(``statplots_stack.stack_geometry``) instead of overlaying them."""
+with a legend of the column names (when there is more than one). ``stack`` stacks the series
+(``statplots_stack.stack_geometry``) instead of overlaying them, ``percent`` (with ``stack``)
+normalises each bin to 100 %."""
 
 from __future__ import annotations
 
@@ -32,20 +33,29 @@ def draw_histogram_multi(
     colors: Sequence[str | None] | None,
     *,
     stack: bool = False,
+    percent: bool = False,
+    opts: dict[str, Any] | None = None,
 ) -> None:
+    """``opts`` (a request's ``dist3``) may carry ``stack`` / ``percent`` instead of the flags."""
+    stack = stack or bool((opts or {}).get("stack"))
+    percent = percent or bool((opts or {}).get("percent"))
+    if percent and not stack:
+        raise ValueError("a 100 % histogram is a stacked one")
     h = histogram_multi([np.asarray(g, dtype=float).ravel() for g in data], bins=bins)
     edges = np.asarray(h["edges"])
-    bars = stack_geometry(h)["bars"] if stack else None
+    bars = stack_geometry(h, percent)["bars"] if stack else None
     for i, s in enumerate(h["series"]):
         c = colors[i] if colors and i < len(colors) else None
         kw: dict[str, Any] = (
             {"facecolor": to_rgba(c, 0.45), "edgecolor": c} if c else {"alpha": 0.45}
         )
+        heights = [b[3] - b[2] for b in bars[i]] if percent and bars else s["counts"]
         cont = ax.bar(
-            edges[:-1], s["counts"], width=np.diff(edges), align="edge", linewidth=0.5,
+            edges[:-1], heights, width=np.diff(edges), align="edge", linewidth=0.5,
             bottom=[b[2] for b in bars[i]] if bars else None,
             label=labels[i] if labels and i < len(labels) else f"column {i + 1}", **kw,
         )
         for p in cont.patches:
             p.set_gid(f"hist-bar-{i}")
-    ax.legend()
+    if len(h["series"]) > 1:
+        ax.legend()

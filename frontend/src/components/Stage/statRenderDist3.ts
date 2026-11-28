@@ -24,6 +24,7 @@ import { drawNumericXAxis, drawValueAxis, type Rect } from "./statRender";
 export const SIDE_FILL_ALPHA = 0.7;
 const LINE_ALPHA = 0.5;
 const DIRECTION_ALPHA = 0.8;
+const RAIN_ALPHA = 0.6;
 
 export interface SideViolinDraw {
   mode: "sideviolin";
@@ -41,6 +42,9 @@ export interface SideViolinDraw {
   bw: "scott" | "silverman" | number;
   /** Inner median / quartile lines, stamped on after the compute (`statDist3Stamp`). */
   innerMarks?: ViolinMarks;
+  /** A mean marker on each violin, and the raw points beside a half violin (stamped on). */
+  meanMarker?: boolean;
+  rain?: boolean;
   valueLabel: string;
 }
 export interface PairedDraw {
@@ -49,6 +53,8 @@ export interface PairedDraw {
   ci: boolean;
   /** Colour each subject's line by up / down / same, with a legend (stamped on). */
   direction?: boolean;
+  /** The absolute "no change" tolerance of the direction (stamped on; 0 = exact equality). */
+  tol?: number;
   labels: [string, string];
   valueLabel: string;
 }
@@ -108,7 +114,7 @@ function trace(ctx: CanvasRenderingContext2D, pts: readonly Pt[], sx: (v: number
 }
 
 export function drawSideViolin(ctx: CanvasRenderingContext2D, rect: Rect, d: SideViolinDraw, ink: string, muted: string) {
-  const geo = sideViolinGeometry(d.wire, d.positions, d.sides, d.style, d.groups, d.innerMarks);
+  const geo = sideViolinGeometry(d.wire, d.positions, d.sides, d.style, d.groups, d.innerMarks, { mean: d.meanMarker, rain: d.rain && d.style === "half" });
   const { sx, sy } = mapper(rect, geo.x_domain, geo.y_domain);
   drawValueAxis(ctx, rect, geo.y_domain, d.valueLabel, ink, muted);
   const names = d.slotLabels.length === geo.slots ? d.slotLabels : Array.from({ length: geo.slots }, (_, i) => String(i + 1));
@@ -127,6 +133,16 @@ export function drawSideViolin(ctx: CanvasRenderingContext2D, rect: Rect, d: Sid
     ctx.lineWidth = 1.5;
     trace(ctx, v.line, sx, sy);
     ctx.stroke();
+    if (v.rain) {
+      ctx.globalAlpha = RAIN_ALPHA;
+      ctx.fillStyle = color;
+      for (const [x, y] of v.rain) {
+        ctx.beginPath();
+        ctx.arc(sx(x), sy(y), 2, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
     for (const m of v.marks ?? []) {
       ctx.strokeStyle = ink;
       ctx.lineWidth = m.name === "median" ? 2 : 1;
@@ -135,6 +151,20 @@ export function drawSideViolin(ctx: CanvasRenderingContext2D, rect: Rect, d: Sid
       ctx.stroke();
     }
     ctx.setLineDash([]);
+    if (v.mean) {
+      const [cx, cy] = [sx(v.mean.x), sy(v.mean.y)];
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - 5);
+      ctx.lineTo(cx + 5, cy);
+      ctx.lineTo(cx, cy + 5);
+      ctx.lineTo(cx - 5, cy);
+      ctx.closePath();
+      ctx.fillStyle = "#fff";
+      ctx.fill();
+      ctx.strokeStyle = ink;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
   }
   ctx.restore();
   if (d.style === "split" && d.levels.length) {
@@ -156,7 +186,7 @@ export function drawSideViolin(ctx: CanvasRenderingContext2D, rect: Rect, d: Sid
 }
 
 export function drawPaired(ctx: CanvasRenderingContext2D, rect: Rect, d: PairedDraw, ink: string, muted: string) {
-  const geo = pairedGeometry(d.series, d.ci, !!d.direction);
+  const geo = pairedGeometry(d.series, d.ci, !!d.direction, d.tol ?? 0);
   const { sx, sy } = mapper(rect, geo.x_domain, geo.y_domain);
   drawValueAxis(ctx, rect, geo.y_domain, d.valueLabel, ink, muted);
   drawPositions(ctx, rect, sx, d.labels, ink, muted);
@@ -275,5 +305,25 @@ export function drawLollipop(ctx: CanvasRenderingContext2D, rect: Rect, d: Lolli
     ctx.arc(sx(x), sy(y), 4.5, 0, 2 * Math.PI);
     ctx.fill();
   }
+  ctx.strokeStyle = ink;
+  ctx.lineWidth = 1.2;
+  for (const [a, b] of geo.whiskers ?? []) {
+    trace(ctx, [a, b], sx, sy);
+    ctx.stroke();
+  }
   ctx.restore();
+  if (geo.legend) {
+    ctx.font = "11px sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    const spot = legendSpot(rect, 1, geo.dots.map(([x, y]): [number, number] => [sx(x), sy(y)]));
+    ctx.strokeStyle = ink;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(spot.x, spot.y);
+    ctx.lineTo(spot.x + 12, spot.y);
+    ctx.stroke();
+    ctx.fillStyle = ink;
+    ctx.fillText(geo.legend, spot.x + 18, spot.y);
+  }
 }

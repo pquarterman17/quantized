@@ -8,18 +8,18 @@
 // stage says so, it never draws a panel from other rows.
 
 import type { FacetSlice } from "../../lib/facet";
-import { resolveGroups, type StatMode } from "../../lib/statstage";
+import { finiteOf, resolveGroups, type StatMode } from "../../lib/statstage";
 import { computeGroupedDraw, computePairedDraw, type GroupedOpts } from "./statDist3Draw";
-import { computeGroupHistogramDraw } from "./statHistMulti";
+import { computeGroupHistogramDraw, histogramColumns } from "./statHistMulti";
 import type { StatDrawData } from "./statRender";
 import type { FacetDraw } from "./useStatStageCompute";
 
 export type FacetVariant = "sideviolin" | "lollipop" | "paired" | "histogram";
 
-/** The variant `mode` draws as under a facet column, or null (a plain histogram, Q-Q ... are not faceted). */
-export function facetVariant(mode: StatMode, splitHist: boolean): FacetVariant | null {
-  if (mode === "sideviolin" || mode === "lollipop" || mode === "paired") return mode;
-  return mode === "histogram" && splitHist ? "histogram" : null;
+/** The variant `mode` draws as under a facet column, or null (Q-Q, CDF ... are not faceted). A histogram is
+ *  one series per "group by" level when split, else one per picked column (no fit: a fit is a flat feature). */
+export function facetVariant(mode: StatMode): FacetVariant | null {
+  return mode === "sideviolin" || mode === "lollipop" || mode === "paired" || mode === "histogram" ? mode : null;
 }
 
 export interface FacetVariantOpts extends GroupedOpts {
@@ -28,12 +28,20 @@ export interface FacetVariantOpts extends GroupedOpts {
   valueCol: number;
   plotted: readonly number[];
   histCols: readonly number[];
+  /** A histogram split by the "group by" column (else one series per picked column). */
+  splitHist: boolean;
   pairedCi: boolean;
   bins: string;
 }
 
 async function sliceDraw(s: FacetSlice, v: FacetVariant, o: FacetVariantOpts): Promise<StatDrawData> {
   if (v === "paired") return computePairedDraw(s.data, { yCol: o.valueCol, histCols: o.histCols, ci: o.pairedCi });
+  if (v === "histogram" && !o.splitHist) {
+    // plain histogram of this panel's rows: the value column and the extra columns, shared bins
+    const cols = histogramColumns(o.valueCol, o.histCols, s.data.labels.length);
+    const specs = cols.map((c) => ({ label: s.data.labels[c] ?? `column ${c}`, values: finiteOf(s.data, c) }));
+    return computeGroupHistogramDraw(specs, o.bins, o.valueLabel, 1);
+  }
   const groups = resolveGroups(s.data, o.groupCol, o.valueCol, o.plotted, o.group2Col).filter((g) => g.values.length > 0);
   if (!groups.length) throw new Error("no finite values to group");
   return v === "histogram" ? computeGroupHistogramDraw(groups, o.bins, o.valueLabel) : computeGroupedDraw(v, groups, o);

@@ -13797,6 +13797,17 @@
             "const": "lollipop",
             "title": "Type",
             "type": "string"
+          },
+          "whisker": {
+            "default": "none",
+            "enum": [
+              "none",
+              "sd",
+              "sem",
+              "ci"
+            ],
+            "title": "Whisker",
+            "type": "string"
           }
         },
         "required": [
@@ -16848,6 +16859,12 @@
             "maxItems": 3,
             "title": "Direction Colors",
             "type": "array"
+          },
+          "tol": {
+            "default": 0.0,
+            "minimum": 0.0,
+            "title": "Tol",
+            "type": "number"
           },
           "type": {
             "const": "paired",
@@ -23055,6 +23072,16 @@
             "title": "Marks",
             "type": "string"
           },
+          "mean": {
+            "default": false,
+            "title": "Mean",
+            "type": "boolean"
+          },
+          "rain": {
+            "default": false,
+            "title": "Rain",
+            "type": "boolean"
+          },
           "sides": {
             "items": {
               "enum": [
@@ -25007,6 +25034,11 @@
       "StackOptions": {
         "description": "``kind=\"histogram\"`` of several columns: stack the series on the shared bins.",
         "properties": {
+          "percent": {
+            "default": false,
+            "title": "Percent",
+            "type": "boolean"
+          },
           "stack": {
             "default": true,
             "title": "Stack",

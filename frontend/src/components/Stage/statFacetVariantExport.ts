@@ -5,7 +5,7 @@
 
 import type { StatplotFacetSpec, StatplotFigureSpec } from "../../lib/api/figures";
 import { dist3ExportSpec } from "./statDist3Draw";
-import { groupHistogramSpec } from "./statHistMulti";
+import { groupHistogramSpec, stackWire } from "./statHistMulti";
 import type { StatDrawData } from "./statRender";
 import type { FacetDraw } from "./useStatStageCompute";
 
@@ -14,7 +14,7 @@ function panelSpec(d: StatDrawData, bins: string, fmt: string): StatplotFigureSp
   const flat = dist3ExportSpec(d, fmt);
   if (flat) return flat;
   const hist = groupHistogramSpec(d, bins, fmt);
-  return hist && d.mode === "histogram" && d.stack ? { ...hist, dist3: { type: "stack", stack: true } } : hist;
+  return hist && { ...hist, ...stackWire(d) };
 }
 
 /** The facet request for these panels (null when none is a variant draw). */

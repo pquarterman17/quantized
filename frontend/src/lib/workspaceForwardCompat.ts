@@ -217,6 +217,8 @@ export const STAT_PICKS: Classify<StatPicks> = {
   violinSide: G, pairedCi: G, lollipopStat: G, lollipopSort: G, histStack: G,
   // Item 20 variants: v0.45.0's sanitizeStatPicks keeps only the keys it lists (measured), so each is dropped.
   violinMarks: G, pairedDirection: G, lollipopHoriz: G, histSplit: G,
+  // Item 20 extras: the same, so a v0.45.0 reader would drop each of these keys too.
+  violinMean: G, violinRain: G, pairedTol: G, histPercent: G, lollipopWhisker: G,
 };
 // A map view's pinned text (`mapViews[id].annotations`): a different type from `Annotation`.
 export const MAP_ANNOTATION: Classify<MapAnnotation> = { id: V, x: V, y: V, text: V, space: V };

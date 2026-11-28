@@ -108,7 +108,7 @@ export function dist3ExportSpec(draw: { mode: string } | null, fmt: string): Sta
     const d = draw as SideViolinDraw;
     return {
       kind: "sideviolin", data: d.groups, labels: d.labels, fmt, y_label: d.valueLabel,
-      dist3: { type: "sideviolin", style: d.style, slots: d.positions, sides: d.sides, slot_labels: d.slotLabels, levels: d.levels, bw: d.bw, ...(d.innerMarks && d.innerMarks !== "none" ? { marks: d.innerMarks } : {}) },
+      dist3: { type: "sideviolin", style: d.style, slots: d.positions, sides: d.sides, slot_labels: d.slotLabels, levels: d.levels, bw: d.bw, ...(d.innerMarks && d.innerMarks !== "none" ? { marks: d.innerMarks } : {}), ...(d.meanMarker ? { mean: true } : {}), ...(d.rain && d.style === "half" ? { rain: true } : {}) },
       filename: `${d.style}_violin_${d.valueLabel}`,
     };
   }
@@ -116,7 +116,7 @@ export function dist3ExportSpec(draw: { mode: string } | null, fmt: string): Sta
     const d = draw as PairedDraw;
     return {
       kind: "paired", data: [d.series.before, d.series.after], labels: [...d.labels], fmt, y_label: d.valueLabel,
-      dist3: { type: "paired", ci: d.ci, ...directionWire(d.direction) }, filename: `paired_${d.labels[0]}_${d.labels[1]}`,
+      dist3: { type: "paired", ci: d.ci, ...directionWire(d.direction), ...(d.direction && d.tol ? { tol: d.tol } : {}) }, filename: `paired_${d.labels[0]}_${d.labels[1]}`,
     };
   }
   if (draw?.mode === "lollipop") {
@@ -124,7 +124,7 @@ export function dist3ExportSpec(draw: { mode: string } | null, fmt: string): Sta
     const { stat, sort } = d.series;
     return {
       kind: "lollipop", data: d.groups, labels: d.labels, fmt, [d.horizontal ? "x_label" : "y_label"]: lollipopYLabel(d),
-      dist3: { type: "lollipop", stat: stat as LollipopStat, sort: sort as LollipopSort, ...(d.horizontal ? { horizontal: true } : {}) }, filename: `lollipop_${d.valueLabel}`,
+      dist3: { type: "lollipop", stat: stat as LollipopStat, sort: sort as LollipopSort, ...(d.horizontal ? { horizontal: true } : {}), ...(d.series.whisker ? { whisker: d.series.whisker } : {}) }, filename: `lollipop_${d.valueLabel}`,
     };
   }
   return null;

@@ -14,7 +14,7 @@
 // widening. It is a per-user preference (`qz.prefs` layoutTileBelow, 0 = keep
 // floating), not part of the project.
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import type { DataFollow } from "../../lib/windowLayout/types";
 import { useApp } from "../../store/useApp";
@@ -73,7 +73,13 @@ const widthOk = (text: string): number | null => {
 function TileWidthField({ below, onValue }: { below: number; onValue: (px: number) => void }) {
   const [text, setText] = useState(String(below));
   const [note, setNote] = useState<string | null>(null);
-  useEffect(() => setText(String(below)), [below]);
+  // Resync during render when the pref changes, not in an effect: a mount-time effect would overwrite a
+  // refused width the user typed before it ran.
+  const [seen, setSeen] = useState(below);
+  if (seen !== below) {
+    setSeen(below);
+    setText(String(below));
+  }
   const refuse = () => `Use a width from ${WIDTH_RANGE} px. Still tiling below ${below} px.`;
   return (
     <>

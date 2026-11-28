@@ -47,7 +47,7 @@ import type { StatStageSeed } from "../../store/useApp";
 /** The item 20 modes' options (marginal strips, ridgeline overlap and bandwidth, half / split
  *  violin, paired CI, lollipop, stacked histogram), with their defaults. */
 export type Dist2Picks = Required<
-  Pick<StatPicks, "marginal" | "ridgeOverlap" | "ridgeBw" | "violinSide" | "pairedCi" | "lollipopStat" | "lollipopSort" | "histStack" | "violinMarks" | "pairedDirection" | "lollipopHoriz" | "histSplit">
+  Pick<StatPicks, "marginal" | "ridgeOverlap" | "ridgeBw" | "violinSide" | "pairedCi" | "lollipopStat" | "lollipopSort" | "histStack" | "violinMarks" | "pairedDirection" | "lollipopHoriz" | "histSplit" | "violinMean" | "violinRain" | "pairedTol" | "histPercent" | "lollipopWhisker">
 >;
 
 export interface StatStagePicks {
@@ -243,6 +243,8 @@ export function useStatStagePicks(params: UseStatStagePicksParams): StatStagePic
       lollipopSort: picks.lollipopSort ?? "none", histStack: picks.histStack ?? false,
       violinMarks: picks.violinMarks ?? "none", pairedDirection: picks.pairedDirection ?? false,
       lollipopHoriz: picks.lollipopHoriz ?? false, histSplit: picks.histSplit ?? false,
+      violinMean: picks.violinMean ?? false, violinRain: picks.violinRain ?? false, pairedTol: picks.pairedTol ?? 0,
+      histPercent: picks.histPercent ?? false, lollipopWhisker: picks.lollipopWhisker ?? "none",
     },
     setDist2: (patch) => write((p) => ({ ...p, ...patch }), "change statistics plot"),
     histCols: picks.histCols ?? NO_HIST_COLS,

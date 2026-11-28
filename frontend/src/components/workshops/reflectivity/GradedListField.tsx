@@ -4,7 +4,7 @@
 // elsewhere (the fit's parameter table, "Apply to model") unless it already
 // reads as that value. Renders as cells of the editor's 3-column grid.
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 export default function GradedListField<T>({
   label,
@@ -35,14 +35,16 @@ export default function GradedListField<T>({
 }) {
   const shown = format(value);
   const [draft, setDraft] = useState(shown);
-  useEffect(() => {
+  // Resynced during render when the model's value changes (a mount-time effect would overwrite an
+  // unparseable draft typed before it ran). Only the model's value matters, not `parse`/`format`.
+  const [seen, setSeen] = useState(shown);
+  if (seen !== shown) {
+    setSeen(shown);
     setDraft((d) => {
       const p = parse(d);
       return p !== null && format(p) === shown ? d : shown;
     });
-    // `parse`/`format` are module functions; only the model's value matters.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shown]);
+  }
 
   const onText = (text: string) => {
     setDraft(text);

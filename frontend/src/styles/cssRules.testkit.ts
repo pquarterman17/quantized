@@ -8,7 +8,7 @@
 // it; and nothing under the app's import graph reaches it, so it never enters
 // a production bundle.
 
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -22,6 +22,16 @@ export function readShellCss(): string {
 /** `styles/components.css` as text, for component-level layout contracts. */
 export function readComponentsCss(): string {
   return readFileSync(join(dirname(fileURLToPath(import.meta.url)), "components.css"), "utf8");
+}
+
+/** Every `styles/*.css` sheet as text, keyed `./styles/<name>.css`. Read from disk for the same reason as above:
+ *  an `import.meta.glob(..., { query: "?raw" })` over `.css` yields empty strings, so a guard built on it only
+ *  proves the glob matched. */
+export function readAllStyleSheets(): Record<string, string> {
+  const dir = dirname(fileURLToPath(import.meta.url));
+  const out: Record<string, string> = {};
+  for (const f of readdirSync(dir).filter((n) => n.endsWith(".css")).sort()) out[`./styles/${f}`] = readFileSync(join(dir, f), "utf8");
+  return out;
 }
 
 /** Every style rule in the sheet, flattened out of its `@media`/`@container`

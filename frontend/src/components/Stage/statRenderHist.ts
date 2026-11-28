@@ -22,10 +22,11 @@ export function drawHistogram(
   const sets = d.series ?? [{ label: "", counts: d.counts }];
   const xDomain = finiteDomain([d.edges]);
   // Stacked (item 20): series k sits on the running total of 0..k-1 (`lib/statDist3.stackGeometry`).
-  const stack = d.stack && sets.length > 1 ? stackGeometry(d.edges, sets.map((s) => s.counts)) : null;
-  const yDomain = zeroBasedDomain(stack ? [[stack.y_max]] : [...sets.map((s) => s.counts), d.fit?.pdf ?? []]);
+  const stack = d.stack && sets.length > 1 ? stackGeometry(d.edges, sets.map((s) => s.counts), !!d.percent) : null;
+  const percent = !!stack && !!d.percent;
+  const yDomain: [number, number] = percent ? [0, 105] : zeroBasedDomain(stack ? [[stack.y_max]] : [...sets.map((s) => s.counts), d.fit?.pdf ?? []]);
   drawNumericXAxis(ctx, rect, xDomain, d.valueLabel, ink, muted);
-  drawValueAxis(ctx, rect, yDomain, d.density ? "density" : "count", ink, muted);
+  drawValueAxis(ctx, rect, yDomain, percent ? "percent" : d.density ? "density" : "count", ink, muted);
 
   const sx = (v: number) => rect.x + ((v - xDomain[0]) / (xDomain[1] - xDomain[0])) * rect.w;
   const sy = (v: number) => rect.y + rect.h - ((v - yDomain[0]) / (yDomain[1] - yDomain[0])) * rect.h;

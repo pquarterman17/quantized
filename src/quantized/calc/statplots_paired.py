@@ -19,12 +19,16 @@ Conventions, each stated once here:
 - **Direction.** With ``direction``, each subject is ``up`` (after > before),
   ``down`` (after < before) or ``same`` (exactly equal), and ``legend`` names the
   three with their counts: "increase (3)", "decrease (2)", "no change (1)".
+- **Tolerance.** ``tol`` (absolute, default 0 = exact equality, today's rule) widens "no change":
+  with ``d = after - before`` a subject is ``up`` when ``d > tol``, ``down`` when ``d < -tol``
+  and ``same`` when ``|d| <= tol``.
 - **Y domain.** The finite range of the values (and of the CI bounds when drawn)
   padded by 5 % (``statplots_cdf.padded_domain``).
 """
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import numpy as np
@@ -41,10 +45,16 @@ DIRECTIONS = ("up", "down", "same")
 DIRECTION_LABELS = ("increase", "decrease", "no change")
 
 
-def paired_directions(before: list[float], after: list[float]) -> list[str]:
-    """Each subject's ``up`` / ``down`` / ``same`` (exact comparison)."""
-    pairs = zip(before, after, strict=True)
-    return ["up" if v > u else "down" if v < u else "same" for u, v in pairs]
+def paired_directions(before: list[float], after: list[float], tol: float = 0.0) -> list[str]:
+    """Each subject's ``up`` / ``down`` / ``same``: ``same`` when ``|after - before| <= tol``
+    (``tol`` 0 = exact equality)."""
+    if not (math.isfinite(tol) and tol >= 0):
+        raise ValueError("the no-change tolerance must be a finite number, 0 or more")
+    out = []
+    for u, v in zip(before, after, strict=True):
+        d = v - u
+        out.append("up" if d > tol else "down" if d < -tol else "same")
+    return out
 
 
 def paired_series(before: ArrayLike, after: ArrayLike) -> dict[str, Any]:
@@ -68,12 +78,12 @@ def paired_series(before: ArrayLike, after: ArrayLike) -> dict[str, Any]:
 
 
 def paired_geometry(
-    result: dict[str, Any], ci: bool = False, direction: bool = False
+    result: dict[str, Any], ci: bool = False, direction: bool = False, tol: float = 0.0
 ) -> dict[str, Any]:
     """The vertices each renderer draws, from a :func:`paired_series` result (or
     its JSON): the ``lines`` ([[0, before], [1, after]] per subject), the two
     point sets, the ``means`` markers (``ci`` only), both domains and, with
-    ``direction``, each line's ``directions`` and the ``legend`` rows."""
+    ``direction``, each line's ``directions`` (``tol`` as above) and the ``legend`` rows."""
     b, a = result["before"], result["after"]
     values = [*b, *a]
     means: list[dict[str, float]] = []
@@ -91,7 +101,7 @@ def paired_geometry(
         "means": means,
     }
     if direction:
-        dirs = paired_directions(b, a)
+        dirs = paired_directions(b, a, tol)
         geo["directions"] = dirs
         geo["legend"] = [
             {"key": k, "label": f"{label} ({dirs.count(k)})"}

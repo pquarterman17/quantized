@@ -244,7 +244,7 @@ def render_statplot_figure(
             show_mean_ci=show_mean_ci, show_connect_means=show_connect_means,
             show_n=show_n, connect_breaks=connect_breaks, marks=marks, axis_style=axis_style,
             raw_labels=raw_labels, colors=colors, comparisons=comparisons, cdf=cdf, rug=rug,
-            stack=bool((dist2 or {}).get("stack")),
+            hist_opts=dist2,
         )
         if y_domain is not None:
             ax.set_ylim(float(y_domain[0]), float(y_domain[1]))
@@ -352,7 +352,7 @@ def _draw_statplot(
     comparisons: dict[str, Any] | None = None,
     cdf: dict[str, Any] | None = None,
     rug: dict[str, Any] | None = None,
-    stack: bool = False,
+    hist_opts: dict[str, Any] | None = None,
 ) -> Any | None:
     """Draw one panel. Returns the outer-tier axis of a two-tier nested
     category axis (the x title goes on it), else ``None``.
@@ -466,7 +466,7 @@ def _draw_statplot(
         draw_cdf(ax, cols, labels, cdf, fit, colors, rug, st.line_width)
         return None
     if kind == "histogram" and is_multi(data):  # several columns, shared bins (figure_hist_multi)
-        draw_histogram_multi(ax, data, labels, bins, colors, stack=stack)  # type: ignore[arg-type]
+        draw_histogram_multi(ax, data, labels, bins, colors, opts=hist_opts)  # type: ignore[arg-type]
         draw_rug(ax, data, colors, rug)  # type: ignore[arg-type]
         return None
     sample = np.asarray(data, dtype=float).ravel()

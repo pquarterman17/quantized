@@ -130,7 +130,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   const { marksMode, marks, patchMarks } = useStatMarksState(mode, params);
   const grouped = effectiveGroupCol != null;
   const splitHist = mode === "histogram" && dist2.histSplit && grouped; // a histogram series per "group by" level
-  const facetVar = facetVariant(mode, splitHist); // the item 20 variants draw one panel per facet level too
+  const facetVar = facetVariant(mode); // the item 20 variants draw one panel per facet level too
   const facetOn = effectiveFacetCol != null && (marksMode != null || facetVar != null);
   // The marks before the bar data is known: points / summary (all that
   // `wantPoints` / `barRaw` read). The error-bar kind settles below (`rm`).
@@ -247,7 +247,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
         valueLabel, groupLabel, points: wantPoints ? { rowIds } : null,
         bar: { channels: barValueChannels, labels: barLabels, valueLabel: barValueLabel, stack: barStack, errChannels: barErrorChannels, raw: barRaw ? { rowIds } : null },
         variantOpts: {
-          groupCol: effectiveGroupCol, group2Col: nestCol, valueCol, plotted, histCols, pairedCi: dist2.pairedCi, bins,
+          groupCol: effectiveGroupCol, group2Col: nestCol, valueCol, plotted, histCols, splitHist, pairedCi: dist2.pairedCi, bins,
           side: dist2.violinSide, bw: dist2.ridgeBw, stat: dist2.lollipopStat, sort: dist2.lollipopSort, nestLabel,
           valueLabel: mode === "histogram" || effectiveGroupCol != null ? valueLabel : "value", // the flat draws' own label rule
         },

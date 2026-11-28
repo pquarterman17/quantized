@@ -123,10 +123,10 @@ export interface StatplotFigureSpec {
   /** Item 20: half / split violin (`data` = one list per group, placed by `slots` / `sides`), paired
    *  (`data` = `[before, after]`), lollipop (one list per group), or a stacked multi-column histogram. */
   dist3?:
-    | { type: "sideviolin"; style: "half" | "split"; slots: number[]; sides: ("left" | "right")[]; slot_labels: string[]; levels: string[]; bw: "scott" | "silverman" | number; marks?: "median" | "quartiles" | "both" }
-    | { type: "paired"; ci: boolean; direction?: boolean; direction_colors?: string[] }
-    | { type: "lollipop"; stat: "mean" | "median"; sort: "none" | "asc" | "desc"; horizontal?: boolean }
-    | { type: "stack"; stack: boolean }
+    | { type: "sideviolin"; style: "half" | "split"; slots: number[]; sides: ("left" | "right")[]; slot_labels: string[]; levels: string[]; bw: "scott" | "silverman" | number; marks?: "median" | "quartiles" | "both"; mean?: boolean; rain?: boolean }
+    | { type: "paired"; ci: boolean; direction?: boolean; direction_colors?: string[]; tol?: number }
+    | { type: "lollipop"; stat: "mean" | "median"; sort: "none" | "asc" | "desc"; horizontal?: boolean; whisker?: "sd" | "sem" | "ci" }
+    | { type: "stack"; stack: boolean; percent?: boolean }
     | null;
 }
 

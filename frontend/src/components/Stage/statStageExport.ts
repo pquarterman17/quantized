@@ -53,7 +53,7 @@ import { dist2ExportSpec } from "./statDist2Draw";
 import { dist3ExportSpec } from "./statDist3Draw";
 import { variantFacetSpec } from "./statFacetVariantExport";
 import { colorWire, levelsWire, noteWire, paletteWire } from "./statExportWire";
-import { groupHistogramSpec, histogramColumns, multiHistogramSpec } from "./statHistMulti";
+import { groupHistogramSpec, histogramColumns, multiHistogramSpec, stackWire } from "./statHistMulti";
 import type { StatDrawData } from "./statRender";
 import type { FacetDraw } from "./useStatStageCompute";
 
@@ -431,7 +431,7 @@ export async function exportStatStage(
   const byGroup = groupHistogramSpec(draw, o.bins, fmt);
   if (byGroup || hc.length > 1) {
     const s = byGroup ?? multiHistogramSpec(o.data, hc, hc.map((c) => o.data.labels[c] ?? ""), o.bins, fmt, o.valueLabel);
-    const stack = draw?.mode === "histogram" && draw.stack ? { dist3: { type: "stack" as const, stack: true } } : {};
+    const stack = stackWire(draw);
     if (s) await deliver({ route: "statplot", spec: { ...s, ...rug, ...stack, ...paletteWire() } }, signal, out);
     return;
   }

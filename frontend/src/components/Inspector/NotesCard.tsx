@@ -3,7 +3,7 @@
 // — so typing doesn't mutate the dataset on every keystroke (which would refetch
 // the plot). Notes live on the Dataset object, so they round-trip through .dwk.
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
@@ -17,11 +17,13 @@ export default function NotesCard({ active }: { active: Dataset | null }) {
   // current dataset's notes elsewhere doesn't clobber an in-progress edit).
   // `active?.notes` is DELIBERATELY excluded (R9): pinned by
   // NotesCard.test.tsx's "does not clobber an in-progress edit" /
-  // "resyncs ... when the active id changes" tests.
-  useEffect(() => {
+  // "resyncs ... when the active id changes" tests. Done during render, not in an effect: a mount-time
+  // effect would overwrite notes typed before it ran (draftFields.firstCommit.test.tsx).
+  const [seenId, setSeenId] = useState(active?.id);
+  if (seenId !== active?.id) {
+    setSeenId(active?.id);
     setDraft(active?.notes ?? "");
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `active?.notes` deliberately excluded: id-keyed resync only, see comment above.
-  }, [active?.id]);
+  }
 
   if (!active) return null;
 
