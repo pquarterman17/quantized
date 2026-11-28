@@ -61,7 +61,7 @@ export function pairsFromSheet(ds: Dataset, a: number, b: number, pc: number): O
   if (ds.pending) return { error: `"${ds.name}" is not fully loaded yet; open the sheet, then pick it again` };
   const d = analysisData(ds) ?? ds.data;
   const ids = analysisRowIds(ds);
-  if (new Set([a, b, pc]).size < 3 || a === -1 || b === -1 || pc < 0 || pc >= d.labels.length) {
+  if (a === b || a === pc || b === pc || a === -1 || b === -1 || pc < 0 || pc >= d.labels.length) {
     return { error: "Pick three different columns: group A, group B and p-value" };
   }
   const ra = groupReader(ds.data, d, ids, a);
