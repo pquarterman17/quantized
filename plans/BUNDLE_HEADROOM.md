@@ -1,6 +1,13 @@
 # Bundle headroom campaign
 
-**Current state (2026-11-27, after slice 36):** main sat at 794.2 kB against the 796.9 kB pin (2.7 kB of headroom, the
+**Current state (2026-11-28, after slice 37):** main (`e0a8b43ba`) sat at 814,501 B against the 816,042 B pin (1,541 B of
+headroom) after waves 15 and 16. Seven worksheet, Library and Quick Plot action bodies that only lazy chunks call
+(Freeze Copy, Separate's commit, Combine, Open figure document in a window, and the Quick Plot template save, duplicate and
+apply), plus two functions that no eager module calls, left the entry chunk. Eager **814,501 -> 809,416 B (-5,085 B)**;
+the 816,042 B pin in `check-bundle-size.mjs` is NOT touched, so about 6.6 kB of headroom is for the queued feature
+lanes. See "Slice 37".
+
+**Previous state (2026-11-27, after slice 36):** main sat at 794.2 kB against the 796.9 kB pin (2.7 kB of headroom, the
 parallel feature lanes' shared budget). The editable-figure lifecycle's session, promotion and Library-figure action
 bodies, and the two helper modules only they reach, left the entry chunk. Eager **813,291 -> 805,993 B (-7,298 B)**;
 the 816,042 B pin in `check-bundle-size.mjs` is NOT touched, so about 10 kB of headroom is for the queued feature
@@ -4175,6 +4182,63 @@ Same shape, each under about 1 kB and each needing the same proxy, warm points a
 (3.2 kB) is not a candidate: `clearAll` and the autosave restore call it synchronously.
 
 **Pin:** unmoved, as in slices 28-35: the reclaimed bytes are headroom for the queued branches.
+
+### Slice 37 — worksheet, Library and Quick Plot action bodies on demand, pin UNMOVED — **DONE (2026-11-28)**
+
+**Measured net eager delta -5,085 B (814,501 B -> 809,416 B; 795.4 kB -> 790.4 kB as `check-bundle-size.mjs` prints, `npm ci`-fresh) - budget UNMOVED**
+
+Lane `headroom16`, parent `e0a8b43ba` (main after wave 16, 1.5 kB under the pin). `npm ci`, then `npm run build`; exact bytes are the entry chunk plus the Rolldown runtime (a script over `dist/index.html` that applies `check-bundle-size.mjs`'s own two regexes). The pin is untouched.
+
+| step | eager B | delta B |
+|---|---:|---:|
+| parent (`e0a8b43ba`) | 814,501 | |
+| seven action bodies -> `store/miscActionsRun.ts` behind `store/miscActionsLazy.ts`; `importPathsAppended` -> `store/importPathsAppended.ts`; `sendEditableFigureToReport` -> `commands/sendEditableFigureToReport.ts` | 809,416 | **-5,085** |
+
+#### How it was found
+
+The slice-36 method: `npx vite build --sourcemap`, then two uncommitted scans over the entry chunk's sourcemap (the per-original-line
+bytes of `scripts/eagerAttribution.mjs`'s VLQ walk, joined to the TypeScript AST). The first prices every store action and top-level
+function and lists those whose name no other entry-chunk module uses; the second lists the `async` bodies. Waves 15 and 16 added
+almost nothing to the entry chunk (the largest eager growths were under 60 lines each), so the candidates were old: slice 36's
+"left on the table" list plus the same class elsewhere.
+
+#### The moves
+
+- **Seven actions** (`store/miscActionsRun.ts`, moved verbatim, the slice-32 `lazyActions` shape): `freezeCopy`,
+  `commitSeparateWorksheets`, `combineWorkbooks`, `openFigureDocInWindow`, `saveQuickPlotTemplate`, `duplicateQuickPlotTemplate`,
+  `applyQuickPlotTemplate`. Each slice keeps its interface and doc comments and spreads `miscActions(set, get).<name>` from
+  `store/miscActionsLazy.ts` (one shared loader). Every caller is a lazy chunk, checked against the entry chunk's module list.
+  Callers that read a result on their first call import `store/miscActionsReady.ts` (a top-level `await` of the load, the slice-36
+  gate): the Separate and Combine dialogs, Quick Plot With, the recipe library's actions and `commands/importAsSheets.ts`. The
+  others (the derived-worksheet banner and context action, the Saved figures section, the Quick Figure builder's save) ignore
+  the result, so a call that beats the load simply waits for it and runs. A chunk that will not load says so in the status line
+  and a danger toast, and later cold calls are refused (`store/lazyActions.ts`).
+- **`importPathsAppended`** (493 B profiled) -> `store/importPathsAppended.ts`; its only caller is the lazy `fileCommandsLazy.ts`.
+- **`sendEditableFigureToReport`** (376 B) -> `commands/sendEditableFigureToReport.ts`; its only caller is the Library's lazy context
+  actions (`sendFigureToReport` stays in `plotCommands.ts`: an eager command body calls it).
+
+#### Tried and put back
+
+- **`encodePersistedCells`** into the existing `nonFiniteCellsStruct` half (307 B): the sourcemap scan showed no eager user, but
+  `lib/figureDocumentWire.ts` is statically reachable from the entry graph and imports it, so the re-exported-half guard in
+  `architecture.test.ts` refuses it. Reverted.
+- **`store/collapsedWorkbookMoves.ts`** (787 B) stays for the slice-35/36 reason (its `useApp` import); `useApp.ts` is not touched.
+- **`addFormula` / `updateFormula`** (2.5 kB between them) are the largest remaining set with no entry-chunk caller, but their callers
+  (`setColumnValuesRun`, `mirrorColumn`, `insertSimilar`, the pipeline's `executeSteps`, `worksheetColumns`) read the boolean result
+  synchronously from several unrelated lazy roots, so a gate per root would be a wide audit for one slice.
+- Not taken: `batchEditDatasetMetadata` (720 B), whose result the Library's details and multi-select bar read from chunks that
+  load right after mount, so a gate would delay their first render; `duplicatePlotSpec` / `saveAsPlotSpec` (`useGraphBuilder.ts` has no line
+  to spare for the gate import).
+
+#### Tests and guards
+
+- `store/miscActions.cold.test.ts` (new): a call before the load runs once it lands (with its undo entry), a warm call is synchronous and
+  returns the body's value (including a refusal), and a body that will not load is reported once and changes nothing. Every existing
+  spec for the seven actions runs against the warmed slice (`test/setup.ts`).
+- `architecture.test.ts`: one `SEAMS` entry (`store/miscActionsRun.ts`), `store/miscActionsReady.ts` in the top-level-await allowlist, and a
+  check that each of the five reader chunks imports it.
+
+**Pin:** unmoved, as in slices 28-36: the reclaimed bytes are headroom for the queued branches.
 
 ## What this does NOT change
 

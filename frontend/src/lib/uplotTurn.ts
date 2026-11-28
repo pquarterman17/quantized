@@ -103,6 +103,7 @@ function uprightContext(
  *  the plot has horizontal bars. */
 export function turnPlugins(plugins: uPlot.Plugin[]): uPlot.Plugin[] {
   return plugins.map((plugin) => {
+    if ((plugin as { rawPixels?: boolean }).rawPixels) return plugin; // works in plot-area px (lib/uplotPointer.ts)
     const hooks: Record<string, unknown> = {};
     for (const [name, hook] of Object.entries(plugin.hooks)) {
       if (!DRAW_HOOKS.has(name) || typeof hook !== "function") {

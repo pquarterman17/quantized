@@ -7,7 +7,7 @@ import { renameLibraryNode } from "../../lib/libraryRename";
 import { askParams } from "../overlays/ParamDialog";
 import type { ContextMenuItem } from "../overlays/ContextMenu";
 import { useApp } from "../../store/useApp";
-import { sendEditableFigureToReport } from "../../commands/plotCommands";
+import { sendEditableFigureToReport } from "../../commands/sendEditableFigureToReport";
 import { buildMenuItems, runContextAction, type ContextAction, type MenuEntry } from "../../lib/contextActions";
 import type { LibraryNode } from "../../lib/libraryHierarchy";
 import { pagesReferencingFigure } from "../../lib/pageDocumentActions";

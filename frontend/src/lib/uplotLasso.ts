@@ -11,6 +11,7 @@ import type uPlot from "uplot";
 
 import { setActiveGestureCancel } from "./gestureCancel";
 import { pickMarksPlugin } from "./uplotPickMarks";
+import type { RawPixelPlugin } from "./uplotPointer";
 
 /** Outline points closer than this (css px) are not recorded. */
 const STEP_PX = 3;
@@ -18,9 +19,10 @@ const STEP_PX = 3;
 export type LassoHandler = (u: uPlot, poly: [number, number][], unmask: boolean) => void;
 export type PickHandler = (u: uPlot, at: [number, number]) => void;
 
-export function lassoPlugin(onLasso: LassoHandler, color: string): uPlot.Plugin {
+export function lassoPlugin(onLasso: LassoHandler, color: string): RawPixelPlugin {
   let poly: [number, number][] = [];
   return {
+    rawPixels: true, // the outline is plot-area px: a turned plot does not turn it
     hooks: {
       ready: (u: uPlot) => {
         const over = u.over;
@@ -86,9 +88,10 @@ export function lassoPlugin(onLasso: LassoHandler, color: string): uPlot.Plugin 
  *  place, so a drag is not one) is handed over on its OWN channel, as one
  *  point in css px over the plotting area. It shares nothing with the lasso's
  *  outline hand-off, so a pick can never reach the mask code. */
-export function pickPlugin(onPick: PickHandler): uPlot.Plugin {
+export function pickPlugin(onPick: PickHandler): RawPixelPlugin {
   const marks = pickMarksPlugin(); // the picked points are marked while picking too
   return {
+    rawPixels: true,
     hooks: {
       ...marks.hooks,
       ready: (u: uPlot) => {

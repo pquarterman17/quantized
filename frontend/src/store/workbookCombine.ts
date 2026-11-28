@@ -31,14 +31,8 @@
 // had one"), so the new workbook's placement and its members' folder-view
 // placement can never disagree.
 
-import { nextWorkbookId } from "./workbookIds";
-import { toast } from "./toasts";
-import {
-  dedupeWorksheetNames,
-  resolveCombineTargets,
-  type CombineSelection,
-} from "../lib/workbookCombine";
-import type { WorkbookNode } from "../lib/workbooks";
+import type { CombineSelection } from "../lib/workbookCombine";
+import { miscActions } from "./miscActionsLazy";
 import type { AppState } from "./useApp";
 
 export type { CombineSelection } from "../lib/workbookCombine";
@@ -64,44 +58,6 @@ export interface WorkbookCombineSlice {
 
 export function createWorkbookCombineSlice(set: SliceSet, get: SliceGet): WorkbookCombineSlice {
   return {
-    combineWorkbooks: (selection, name) => {
-      const s = get();
-      const targetIds = resolveCombineTargets(selection, s.datasets);
-      if (targetIds.length === 0) {
-        s.setStatus("Combine unavailable: nothing selected");
-        return null;
-      }
-      const trimmedName = name.trim();
-      if (!trimmedName) {
-        s.setStatus("Combine unavailable: a workbook name is required");
-        return null;
-      }
-
-      const newId = nextWorkbookId();
-      const targetSet = new Set(targetIds);
-      const orderedNames = targetIds.map((id) => s.datasets.find((d) => d.id === id)!.name);
-      const dedupedNames = dedupeWorksheetNames(orderedNames);
-      const nameById = new Map(targetIds.map((id, i) => [id, dedupedNames[i]]));
-
-      get().recordHistory("combine workbooks");
-      // New workbook lands at the Library root — combine never suggests a
-      // folder (see this file's header P1 note) — so every moved worksheet's
-      // folderId follows it there too, unconditionally, exactly like
-      // moveWorkbookToFolder does for an ordinary workbook move.
-      const workbook: WorkbookNode = { id: newId, name: trimmedName };
-      set((st) => ({
-        workbooks: [...st.workbooks, workbook],
-        datasets: st.datasets.map((d) =>
-          targetSet.has(d.id)
-            ? { ...d, workbookId: newId, folderId: undefined, name: nameById.get(d.id)! }
-            : d,
-        ),
-      }));
-
-      const count = targetIds.length;
-      toast(`combined ${count} worksheet${count === 1 ? "" : "s"} into "${trimmedName}"`, "ok");
-      get().setStatus(`combined ${count} worksheet${count === 1 ? "" : "s"} into "${trimmedName}"`);
-      return newId;
-    },
+    combineWorkbooks: miscActions(set, get).combineWorkbooks,
   };
 }

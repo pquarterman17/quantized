@@ -17,6 +17,7 @@ import type { PlotPayload, PlotSeriesSpec } from "./plotdata";
 import type { RowRange } from "./rowRange";
 import { filteredOutSet } from "./rowstate";
 import type { Dataset } from "./types";
+import { dataToPx } from "./uplotPointerPx";
 import { waterfallSourceRows } from "./waterfallOffset";
 
 type Cols = readonly (readonly (number | null)[])[];
@@ -180,7 +181,7 @@ export function lassoRows(
   return { rows: rowsInPolygon(full, p.series.slice(0, plotted.length), plotted.length, poly, toPx).filter((r) => inWindow(r, range)) };
 }
 
-function rowsInRange(xs: readonly (number | null)[], x0: number, x1: number): number[] {
+export function rowsInRange(xs: readonly (number | null)[], x0: number, x1: number): number[] {
   const rows: number[] = [];
   for (let r = 0; r < xs.length; r++) if (inRange(xs[r], x0, x1)) rows.push(r);
   return rows;
@@ -265,8 +266,7 @@ export function nearestDrawn(
       const xv = xs[r];
       const yv = cols[s + 1]?.[r];
       if (xv == null || yv == null || !Number.isFinite(xv) || !Number.isFinite(yv)) return null;
-      const [px, py] = [u.valToPos(xv, "x", false), u.valToPos(yv, u.series[s + 1]?.scale ?? "y", false)];
-      return u.scales.x.ori === 1 ? [py, px] : [px, py]; // a turned plot: X is the vertical position
+      return dataToPx(u, xv, yv, u.series[s + 1]?.scale ?? "y"); // a turned plot: X is the vertical position
     },
     lx,
     ly,

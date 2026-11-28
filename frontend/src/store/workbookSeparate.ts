@@ -30,9 +30,8 @@
 // The plan builder loads on the first Separate (bundle diet slice 16): only
 // the preview needs it, and its caller is the lazy dataset-row menu.
 import type { SeparatePlan } from "../lib/workbookSeparate";
-import { nextWorkbookId } from "./workbookIds";
 import { toast } from "./toasts";
-import type { WorkbookNode } from "../lib/workbooks";
+import { miscActions } from "./miscActionsLazy";
 import type { AppState } from "./useApp";
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
@@ -121,41 +120,6 @@ export function createWorkbookSeparateSlice(set: SliceSet, get: SliceGet): Workb
 
     closeSeparatePreview: () => set({ separatePreview: null }),
 
-    commitSeparateWorksheets: (name) => {
-      const s = get();
-      const plan = s.separatePreview;
-      if (!plan || plan.movingDatasetIds.length === 0) {
-        s.setStatus("Separate unavailable: open a preview first");
-        return null;
-      }
-      const live = new Set(s.datasets.map((d) => d.id));
-      if (!plan.movingDatasetIds.every((id) => live.has(id))) {
-        s.setStatus("Separate unavailable: the previewed worksheet changed — re-open Separate to refresh the plan");
-        return null;
-      }
-
-      const trimmedName = (name ?? "").trim() || plan.suggestedName || "New Workbook";
-      const movingSet = new Set(plan.movingDatasetIds);
-      // P3 slice-2 fix: the REAL session-unique id is minted HERE, exactly
-      // once, at commit — never during preview (see
-      // PENDING_SEPARATE_WORKBOOK_ID's doc above). `plan.newWorkbookId`
-      // (the shared placeholder) is deliberately never used past this point.
-      const newWorkbookId = nextWorkbookId();
-
-      get().recordHistory("separate worksheet");
-      const newFolderId = plan.newWorkbookFolderId;
-      const workbook: WorkbookNode = { id: newWorkbookId, name: trimmedName, folderId: newFolderId };
-      set((st) => ({
-        workbooks: [...st.workbooks, workbook],
-        datasets: st.datasets.map((d) =>
-          movingSet.has(d.id) ? { ...d, workbookId: newWorkbookId, folderId: newFolderId } : d,
-        ),
-        separatePreview: null,
-      }));
-
-      toast(`separated into "${trimmedName}"`, "ok");
-      get().setStatus(`separated into "${trimmedName}"`);
-      return newWorkbookId;
-    },
+    commitSeparateWorksheets: miscActions(set, get).commitSeparateWorksheets,
   };
 }
