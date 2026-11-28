@@ -12,6 +12,7 @@ import LegendControls from "./LegendControls";
 import TickFormat from "./TickFormat";
 import { objectEditorIsPopup } from "../../lib/objectEditorMode";
 import { PLOT_TEMPLATES } from "../../lib/plotTemplates";
+import { onLoadFailure, runLazy } from "../../lib/runLazy";
 import { Select } from "../primitives";
 import Card from "../primitives/Card";
 import { openFigureDialog, type AxisId } from "../../store/figureDialogs";
@@ -40,7 +41,9 @@ function AxisLaunchers() {
           type="button"
           className="qz-btn"
           title="The extra right-hand axes (Y3 and up)"
-          onClick={() => void import("../../lib/multiYCommands").then((m) => m.editExtraYAxes(useApp.getState))}
+          onClick={() =>
+            void runLazy("Opening the Y axes…", () => import("../../lib/multiYCommands")).then((m) => m.editExtraYAxes(useApp.getState), onLoadFailure)
+          }
         >
           Y3+ axes…
         </button>
