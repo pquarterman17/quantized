@@ -119,7 +119,7 @@ export function buildEditDataExtras(s: StoreGet): Action[] {
       id: "time-series-pivot",
       group: "Data",
       section: "Recalculation",
-      label: "Pivot (long to wide)…",
+      label: "Pivot by time and key (long to wide)…",
       description: "Reshape a time, key, value sheet into one column per key as a new worksheet, or stack columns back; repeated times are refused or combined by a rule you pick.",
       keywords: "pivot unpivot melt reshape long wide stack columns time series key value transpose",
       disabled: () => !(s().worksheetId ?? s().activeId),

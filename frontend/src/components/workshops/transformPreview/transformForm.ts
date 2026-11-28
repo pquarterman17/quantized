@@ -17,7 +17,7 @@ export const OP_OPTIONS: { value: PreviewOp; label: string }[] = [
   { value: "merge", label: "Append rows (merge)" },
   { value: "join", label: "Join by key" },
   { value: "stack", label: "Stack columns (wide → long)" },
-  { value: "unstack", label: "Unstack / pivot (long → wide)" },
+  { value: "unstack", label: "Unstack by category (long → wide)" },
   { value: "transpose", label: "Transpose" },
   { value: "dedupe", label: "Remove duplicate rows" },
   { value: "fillmissing", label: "Fill or drop missing values" },

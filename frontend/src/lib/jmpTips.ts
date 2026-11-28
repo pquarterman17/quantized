@@ -65,7 +65,7 @@ export const JMP_TIPS: readonly JmpTip[] = [
     id: "stack-unstack",
     jmp: "Tables > Stack (convert columns to rows) or Unstack (pivot rows to columns)",
     quantized:
-      "Data ▸ Stack columns to long form… reshapes wide columns into category and value columns in long form. Unstack / pivot to wide form… pivots category and value columns into separate columns.",
+      "Data ▸ Stack columns to long form… reshapes wide columns into category and value columns in long form. Unstack by category to wide form… pivots category and value columns into separate columns; Pivot by time and key (long to wide)… does it for a time, key, value sheet.",
     keywords: "stack unstack pivot reshape transpose long wide form",
   },
   {
