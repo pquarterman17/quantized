@@ -35,6 +35,7 @@ __all__ = ["BarFaces", "cull_hidden_faces", "make_bar_faces"]
 
 # bar3d's unit cuboid: [face, vertex, xyz]. Every face is counter-clockwise seen
 # from outside when the box's dx, dy and dz are positive.
+SEAM_PT = 0.3
 _CUBOID = np.array(
     [
         ((0, 0, 0), (0, 1, 0), (1, 1, 0), (1, 0, 0)),  # -z
@@ -96,7 +97,7 @@ def _screen_area(ax: Any, polys: NDArray[np.float64]) -> NDArray[np.float64]:
     return np.asarray(area).reshape(polys.shape[0], 6)
 
 
-def cull_hidden_faces(ax: Any, faces: BarFaces) -> int:
+def cull_hidden_faces(ax: Any, faces: BarFaces, seam_pt: float = SEAM_PT) -> int:
     """Replace ``faces.collection`` by one holding only the faces that face the
     camera (call after the view and the limits are final). Returns the number of
     faces dropped; 0 when nothing was safe to drop."""
@@ -116,7 +117,12 @@ def cull_hidden_faces(ax: Any, faces: BarFaces) -> int:
         return 0
     faces.collection.remove()
     kept = Poly3DCollection(
-        list(faces.polys[keep]), facecolors=colours[keep], shade=True, zsort="average"
+        list(faces.polys[keep]),
+        facecolors=colours[keep],
+        edgecolors=colours[keep],
+        linewidths=seam_pt,
+        shade=True,
+        zsort="average",
     )
     ax.add_collection(kept, autolim=False)
     return dropped

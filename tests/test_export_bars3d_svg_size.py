@@ -18,7 +18,7 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
-from scipy.ndimage import uniform_filter
+from scipy.ndimage import binary_erosion, uniform_filter
 
 import quantized.calc.figure_map3d_ext_render as render_mod
 from quantized.app import app
@@ -77,11 +77,12 @@ def _pixels(png: bytes) -> np.ndarray:
 
 
 def _blurred_gap(a: np.ndarray, b: np.ndarray) -> np.ndarray:
-    # A one-pixel seam between two faces of one box used to be covered by the
-    # hidden face under it; a 3x3 mean keeps every face's colour and position
-    # and forgives only that seam.
     box = (3, 3, 1)
     return np.abs(uniform_filter(a, size=box) - uniform_filter(b, size=box))
+
+
+def _luma(png: bytes) -> np.ndarray:
+    return _pixels(png) @ np.array([0.299, 0.587, 0.114])
 
 
 VIEWS = [
@@ -92,20 +93,48 @@ VIEWS = [
     pytest.param({"elev": 30, "azim": -60, "low": -8}, id="bars below the base"),
     pytest.param({"elev": 30, "azim": -60, "bar_width": 1.0, "bar_depth": 1.0}, id="touching"),
 ]
+DARK = "#10304a"  # every bar pixel is far darker than the page, so a seam is light
+
+
+def _interior_gap(body: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> tuple[float, float]:
+    """(lightest, darkest) change, in luma, of the culled export against the old one,
+    over the pixels well inside the bars. Faces next to each other are antialiased
+    one by one, so without the hairline that closes the seam the page shows
+    through it: a light line the hidden faces used to cover."""
+    after = _luma(_render(body))
+    _old(monkeypatch, compact=False)
+    before = _luma(_render(body))
+    inside = binary_erosion(before < 120, iterations=2)  # off the silhouette's own edge
+    d = (after - before)[inside]
+    return float(d.max()), float(d.min())
 
 
 @pytest.mark.parametrize("view", VIEWS)
-def test_dropping_hidden_faces_leaves_the_picture_alone(
+def test_dropping_hidden_faces_leaves_the_picture_and_no_light_seams(
+    monkeypatch: pytest.MonkeyPatch, view: dict[str, Any]
+) -> None:
+    lightest, darkest = _interior_gap(_body(14, bar_color=DARK, **view), monkeypatch)
+    assert lightest < 30  # without the seam stroke: 57-66
+    assert darkest > -50
+
+
+def test_without_the_seam_stroke_the_check_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    real = render_mod.cull_hidden_faces
+    monkeypatch.setattr(render_mod, "cull_hidden_faces", lambda ax, faces: real(ax, faces, 0.0))
+    lightest, _ = _interior_gap(_body(14, bar_color=DARK), monkeypatch)
+    assert lightest > 50
+
+
+@pytest.mark.parametrize("view", VIEWS)
+def test_colours_and_places_match_the_old_picture(
     monkeypatch: pytest.MonkeyPatch, view: dict[str, Any]
 ) -> None:
     body = _body(14, **view)
     after = _pixels(_render(body))
     _old(monkeypatch, compact=False)
-    before = _pixels(_render(body))
-    diff = _blurred_gap(after, before)
+    diff = _blurred_gap(after, _pixels(_render(body)))
     assert diff.mean() < 2.0
     assert float((diff.max(axis=2) > 20).mean()) < 0.02
-    assert diff.max() < 70
 
 
 def test_the_check_can_tell_a_culled_visible_face(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -139,13 +168,13 @@ def test_half_the_faces_go_and_the_svg_is_well_formed(monkeypatch: pytest.Monkey
     assert len(new) < 0.5 * len(old)
 
 
-def test_a_10000_bar_svg_is_a_third_of_the_old_size(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_10000_bar_svg_is_well_under_half_the_old_size(monkeypatch: pytest.MonkeyPatch) -> None:
     body = _body(100, fmt="svg")
     new = _render(body)
     _old(monkeypatch)
     old = _render(body)
     assert _paths(old) >= 60_000
-    assert len(new) < 0.35 * len(old)  # measured 0.30: ~3.1 MB from ~10.2 MB
+    assert len(new) < 0.4 * len(old)  # measured 0.34: ~3.5 MB from ~10.2 MB
 
 
 def test_bars_below_the_base_cull_too() -> None:
@@ -209,14 +238,27 @@ def test_compaction_never_moves_a_corner_by_more_than_half_a_thousandth(
     assert worst <= 5e-4 + 1e-9
 
 
+def test_a_seam_stroke_in_the_face_colour_keeps_its_colour_and_hoists_its_width() -> None:
+    stroked = _GROUP.replace(
+        'style="fill: #183b4c"', 'style="fill: #183b4c; stroke: #183b4c; stroke-width: 0.3"'
+    ).replace('style="fill: #212749"', 'style="fill: #212749; stroke: #212749; stroke-width: 0.3"')
+    out = compact_polygon_groups(stroked.encode()).decode()
+    assert '<g id="Poly3DCollection_1" clip-path="url(#pab)" stroke-width="0.3">' in out
+    assert 'style="fill:#183b4c;stroke:#183b4c"/>' in out
+    assert 'style="fill:#212749;stroke:#212749"/>' in out
+
+
 @pytest.mark.parametrize(
     "group",
     [
         _GROUP.replace("L 6 7", "C 6 7 8 9 10 11"),
         _GROUP.replace('style="fill: #212749"', 'style="fill: #212749; stroke: #000"'),
         _GROUP.replace('#pab)" style="fill: #212749', '#o)" style="fill: #212749'),
+        _GROUP.replace(
+            'style="fill: #212749"', 'style="fill: #212749; stroke: #000000; stroke-width: 0.3"'
+        ),
     ],
-    ids=["other command", "other style", "two clips"],
+    ids=["other command", "other style", "two clips", "stroke of another colour"],
 )
 def test_compaction_leaves_a_group_it_does_not_understand_alone(group: str) -> None:
     assert compact_polygon_groups(group.encode()).decode() == group
