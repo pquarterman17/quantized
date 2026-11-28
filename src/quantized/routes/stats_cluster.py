@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from quantized.calc.stats_cluster_hier import hierarchical_cluster
 from quantized.calc.stats_cluster_kmeans import kmeans_cluster
+from quantized.calc.stats_cluster_vars import variable_cluster
 from quantized.heavy_import import heavy_imports
 from quantized.routes._errors import CALC_ERRORS_WITH_LOCK, call_calc, raise_calc_error
 from quantized.routes._export_common import (
@@ -39,12 +40,14 @@ class KmeansRequest(BaseModel):
     seed: int = Field(default=0, ge=0, le=2**31 - 1)
     max_iter: int = Field(default=300, ge=1, le=100000)
     n_init: int = Field(default=10, ge=1, le=200)
+    #: k starting centres in the data's own units (one deterministic run; see calc).
+    initial_centers: list[list[float]] | None = None
 
 
 class HierarchicalRequest(BaseModel):
     x: list[list[float]]
     method: Literal["single", "complete", "average", "ward"] = "average"
-    metric: Literal["euclidean", "cityblock", "correlation"] = "euclidean"
+    metric: Literal["euclidean", "sqeuclidean", "cityblock", "cosine", "correlation"] = "euclidean"
     standardize: Standardize = "zscore"
     k: int | None = Field(default=None, ge=1)
     cut_distance: float | None = Field(default=None, ge=0)
@@ -63,6 +66,7 @@ def kmeans(req: KmeansRequest) -> dict[str, Any]:
                 seed=req.seed,
                 max_iter=req.max_iter,
                 n_init=req.n_init,
+                initial_centers=req.initial_centers,
             )
         )
     )
@@ -78,6 +82,30 @@ def hierarchical(req: HierarchicalRequest) -> dict[str, Any]:
                 method=req.method,
                 metric=req.metric,
                 standardize=req.standardize,
+                k=req.k,
+                cut_distance=req.cut_distance,
+            )
+        )
+    )
+
+
+class VariablesRequest(BaseModel):
+    x: list[list[float]]
+    method: Literal["single", "complete", "average", "ward"] = "average"
+    distance: Literal["abs", "signed"] = "abs"
+    k: int | None = Field(default=None, ge=1)
+    cut_distance: float | None = Field(default=None, ge=0)
+
+
+@router.post("/stats/cluster-variables")
+def cluster_variables(req: VariablesRequest) -> dict[str, Any]:
+    """Cluster the COLUMNS by 1 - |r| (or 1 - r): linkage, labels per variable, dendrogram."""
+    return to_jsonable(  # type: ignore[no-any-return]
+        call_calc(
+            lambda: variable_cluster(
+                req.x,
+                method=req.method,
+                distance=req.distance,
                 k=req.k,
                 cut_distance=req.cut_distance,
             )
