@@ -90,6 +90,9 @@ export interface GraphTemplate {
    *  chunk that runs `sanitizeGraphFormat` itself, so this always-loaded
    *  module never pulls the format code into the eager bundle. */
   format?: unknown;
+  /** A THEME (plan item 42): only these format parts (`lib/formatParts.ts` ids) apply. Absent = the
+   *  whole style. A theme carries no publication `seriesStyles`. Validated by `sanitizeParts`. */
+  parts?: string[];
 }
 
 // ── .dwk sanitizers ─────────────────────────────────────────────────────────
