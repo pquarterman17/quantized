@@ -44,6 +44,29 @@ describe("every sample opens and plots", () => {
   });
 });
 
+describe("a map sample opens only the map", () => {
+  const shown = () => s().plotWindows.filter((w) => w.winState !== "minimized");
+  for (const id of ["heatmap", "surface"]) {
+    it(`${id} (window layout): one map window on screen, no line plot of Qx, Qz or Intensity beside it`, async () => {
+      useApp.setState({ layoutMode: "windows" });
+      expect((await openSample(id)).ok).toBe(true);
+      expect(shown().map((w) => w.kind)).toEqual(["map"]);
+      expect(shown()[0]!.datasetId).toBe(active().id);
+    });
+  }
+
+  it("a pinned plot window of the user's own data stays untouched beside the new map", async () => {
+    useApp.setState({ layoutMode: "windows" });
+    await openSample("decay");
+    const own = s().plotWindows.find((w) => w.kind === "plot")!;
+    useApp.setState({ plotWindows: s().plotWindows.map((w) => (w.id === own.id ? { ...w, pinned: true } : w)) });
+    await openSample("heatmap");
+    const mapId = s().datasets.find((d) => d.name === "sample-map.dat")!.id;
+    expect(shown().map((w) => [w.kind, w.datasetId])).toEqual([["plot", own.datasetId], ["map", mapId]]);
+    expect(s().plotWindows.find((w) => w.id === own.id)?.datasetId).toBe(own.datasetId);
+  });
+});
+
 describe("each family reaches its graph", () => {
   it("error bars: the Signal err column is bound as the Y error", async () => {
     await openSample("decay");

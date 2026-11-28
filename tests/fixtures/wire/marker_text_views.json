@@ -456,6 +456,147 @@
           }
         ]
       ]
+    },
+    {
+      "name": "colour by a number: row numbers replace the coloured dots",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "values": [
+            [
+              10,
+              0
+            ],
+            [
+              11,
+              1
+            ],
+            [
+              12,
+              4
+            ],
+            [
+              13,
+              9
+            ],
+            [
+              14,
+              16
+            ],
+            [
+              15,
+              25
+            ],
+            [
+              16,
+              36
+            ],
+            [
+              17,
+              49
+            ]
+          ],
+          "labels": [
+            "Y",
+            "Z"
+          ],
+          "units": [
+            "u",
+            ""
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#aa3377",
+            "marker_text_from": "rows",
+            "color_by": 1,
+            "colormap": "viridis",
+            "marker_texts": [
+              "1",
+              "2",
+              "3",
+              "4",
+              "5",
+              "6",
+              "7",
+              "8"
+            ]
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "item-24-views"
+      },
+      "canvas": [
+        [
+          {
+            "x": 0,
+            "text": "1"
+          },
+          {
+            "x": 1,
+            "text": "2"
+          },
+          {
+            "x": 2,
+            "text": "3"
+          },
+          {
+            "x": 3,
+            "text": "4"
+          },
+          {
+            "x": 4,
+            "text": "5"
+          },
+          {
+            "x": 5,
+            "text": "6"
+          },
+          {
+            "x": 6,
+            "text": "7"
+          },
+          {
+            "x": 7,
+            "text": "8"
+          }
+        ]
+      ],
+      "dotsUnderText": [
+        false
+      ]
     }
   ]
 }

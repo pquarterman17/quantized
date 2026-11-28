@@ -28,7 +28,7 @@ export function drawColorScatter(u: uPlot, specs: Map<number, ColorScatterSpec>)
   ctx.clip();
   for (const [col, spec] of specs) {
     const ys = u.data[col];
-    if (!ys || spec.diam || u.series[col]?.show === false) continue; // a size-by series is the lazy `sizeScatterPlugin`'s
+    if (!ys || spec.diam || spec.text || u.series[col]?.show === false) continue; // a size-by series is the lazy `sizeScatterPlugin`'s; a text-symbol series draws only its text
     const scaleKey = u.series[col]?.scale ?? "y";
     const flat = spec.flat ? seriesStrokeColor(u, col) : null; // G24 row states: a stateless row keeps the series' stroke
     for (let i = 0; i < xs.length; i++) {

@@ -310,7 +310,9 @@ def _values(
                     _drawn(np.asarray(c.get_offsets(), dtype=float).reshape(-1, 2))[:, i]
                 )
                 data_drawn = data_drawn or not is_overlay(c)
-            elif isinstance(c, LineCollection):
+            elif isinstance(c, LineCollection) and c.get_transform() == a.transData:
+                # Data-space segments only (error-bar ends). A rug tick lives in axes-fraction
+                # coordinates on one side (0..length): not data, and must not range the axis.
                 for seg in c.get_segments():
                     ends.append(np.asarray(seg, dtype=float).reshape(-1, 2)[:, i])
 
