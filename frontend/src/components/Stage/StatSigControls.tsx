@@ -26,6 +26,8 @@ interface Props {
   setMarks: (patch: StatMarks, label?: string) => void;
   /** Why nothing is drawn, or null. */
   error: string | null;
+  /** Why the source cannot be chosen now (the select is shown disabled with this reason), or null. */
+  blockedReason?: string | null;
 }
 
 function Pick({ label, children }: { label: string; children: React.ReactNode }) {
@@ -68,7 +70,7 @@ function Levels({ levels, commit }: { levels: SigLevel[]; commit: (l: SigLevel[]
   );
 }
 
-export default function StatSigControls({ sig, setMarks, error }: Props) {
+export default function StatSigControls({ sig, setMarks, error, blockedReason = null }: Props) {
   const results = useApp((s) => s.analysisResults);
   const datasets = useApp((s) => s.datasets);
   const kind = sig?.source.kind ?? NONE;
@@ -92,8 +94,8 @@ export default function StatSigControls({ sig, setMarks, error }: Props) {
   return (
     <span data-testid="stat-sig-controls" style={{ display: "contents" }}>
       <Pick label="p-values from">
-        <Select aria-label="significance p-value source" options={KINDS} value={kind} onChange={(e) => choose(e.target.value)}
-          title="Brackets and marks drawn from p-values you supply, from a saved post-hoc result or three worksheet columns" />
+        <Select aria-label="significance p-value source" options={KINDS} value={kind} onChange={(e) => choose(e.target.value)} disabled={!!blockedReason}
+          title={blockedReason ?? "Brackets and marks drawn from p-values you supply, from a saved post-hoc result or three worksheet columns"} />
       </Pick>
       {s?.kind === "result" && (
         <Pick label="result">

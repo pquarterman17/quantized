@@ -216,10 +216,13 @@ export default function StatMarksControls({ mode, marks, setMarks, grouped, stac
             </span>
           )}
           </>)}
-          {/* Marks from supplied p-values (item 23): replaces the inline test above while set. */}
-          {(marks.sig || marks.comparisons === "off") && (
-            <StatSigControls sig={marks.sig ?? null} setMarks={setMarks} error={comparisons.error} />
-          )}
+          {/* Marks from supplied p-values (item 23): replaces the inline test above while set; shown disabled, with the reason, while "compare" is on. */}
+          <StatSigControls
+            sig={marks.sig ?? null}
+            setMarks={setMarks}
+            error={comparisons.error}
+            blockedReason={!marks.sig && marks.comparisons !== "off" ? 'Set "compare" to off to draw marks from p-values you supply' : null}
+          />
         </>
       )}
       <Picker label="labels">

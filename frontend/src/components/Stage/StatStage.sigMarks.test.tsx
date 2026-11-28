@@ -78,6 +78,17 @@ beforeEach(() => {
 });
 
 describe("marks from supplied p-values, through the controls", () => {
+  it("shows the source select disabled, with the reason, while compare is on (acceptance 14, U-c)", async () => {
+    render(<StatStage />);
+    const source = combo("significance p-value source");
+    expect(source).toBeEnabled();
+    await userEvent.selectOptions(combo("significance marks"), "brackets");
+    await waitFor(() => expect(combo("significance p-value source")).toBeDisabled());
+    expect(combo("significance p-value source")).toHaveAttribute("title", expect.stringMatching(/"compare" to off/));
+    await userEvent.selectOptions(combo("significance marks"), "off");
+    await waitFor(() => expect(combo("significance p-value source")).toBeEnabled());
+  });
+
   it("has no source until the user picks one, then draws from the picked result", async () => {
     render(<StatStage />);
     await waitFor(() => expect(combo("significance p-value source")).toHaveValue(""));
