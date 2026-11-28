@@ -211,7 +211,8 @@ class _AxisTickFormatter(Formatter):
     def __init__(self, mode: str, digits: float, label_chars: int | None = None) -> None:
         self.mode = mode
         self.digits = max(0, min(20, _js_round(digits)))
-        self.label_chars = label_chars  # the screen's drawn label width (calendar modes' tick spacing)
+        # the screen's drawn label width (a calendar mode's tick spacing)
+        self.label_chars = label_chars
 
     def __call__(self, x: float, pos: int | None = None) -> str:
         # `self.axis` is typed as a union of matplotlib's real `Axis` and two
@@ -265,7 +266,8 @@ def axis_tick_formatter(fmt: Mapping[str, Any] | None) -> Formatter | None:
         return None
     digits = fmt.get("digits", 2)
     chars = fmt.get("labelChars")
-    return _AxisTickFormatter(str(mode), float(digits), int(chars) if isinstance(chars, int) and chars > 0 else None)
+    width = int(chars) if isinstance(chars, int) and chars > 0 else None
+    return _AxisTickFormatter(str(mode), float(digits), width)
 
 
 def apply_tick_formats(

@@ -47,7 +47,9 @@ class SystemResult:
     warnings: list[str] = field(default_factory=list)
 
 
-def _rank_warning(evaluate: Callable[[NDArray[np.float64]], NDArray[np.float64]], point: NDArray[np.float64]) -> str | None:
+def _rank_warning(
+    evaluate: Callable[[NDArray[np.float64]], NDArray[np.float64]], point: NDArray[np.float64]
+) -> str | None:
     """Warn when the Jacobian at ``point`` has fewer independent rows than unknowns."""
     n = point.size
     jac = np.empty((n, n))

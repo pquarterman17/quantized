@@ -79,8 +79,10 @@ def test_kmeans_route_takes_initial_centres() -> None:
     assert r.status_code == 200
     d = r.json()
     assert d["init"] == "given" and d["n_init"] == 1 and d["counts"] == [10, 10]
-    rev = client.post("/api/stats/kmeans", json={"x": x, "k": 2, "initial_centers": start[::-1]}).json()
-    assert rev["labels"] == [3 - lab for lab in d["labels"]]  # centres typed the other way round: numbers swap
+    body = {"x": x, "k": 2, "initial_centers": start[::-1]}
+    rev = client.post("/api/stats/kmeans", json=body).json()
+    # centres typed the other way round: the numbers swap
+    assert rev["labels"] == [3 - lab for lab in d["labels"]]
     bad = client.post("/api/stats/kmeans", json={"x": x, "k": 3, "initial_centers": start})
     assert bad.status_code == 422 and "initial centres" in str(bad.json())
 

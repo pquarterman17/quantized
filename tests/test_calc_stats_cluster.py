@@ -262,7 +262,8 @@ def test_given_initial_centres_are_one_deterministic_run_in_original_units() -> 
 def test_given_centres_number_the_clusters_in_the_order_they_were_given() -> None:
     x = [[0.0, 0.0], [1.0, 0.0], [10.0, 10.0], [11.0, 10.0]]
     r = kmeans_cluster(x, 2, standardize="none", initial_centers=[[11.0, 10.0], [0.0, 0.0]])
-    assert r["labels"] == [2, 2, 1, 1]  # cluster 1 grew from the first centre typed, not the smaller centroid
+    # cluster 1 grew from the first centre typed, not from the smaller centroid
+    assert r["labels"] == [2, 2, 1, 1]
     np.testing.assert_allclose(r["centroids"], [[10.5, 10.0], [0.5, 0.0]])
     assert r["counts"] == [2, 2]
     # the same data without centres keeps the sorted numbering

@@ -36,7 +36,12 @@ def test_the_screens_label_width_gives_the_same_ticks(case: dict[str, Any]) -> N
     """The request carries the width the screen's labels had; the step follows it exactly."""
     formatter: Any = axis_tick_formatter({"mode": case["mode"], "digits": 2})
     ticks = date_tick_values(
-        case["lo"], case["hi"], case["plot_px"], case["font_px"], formatter.text, case["label_chars"]
+        case["lo"],
+        case["hi"],
+        case["plot_px"],
+        case["font_px"],
+        formatter.text,
+        case["label_chars"],
     )
     assert ticks == pytest.approx(case["ticks"], abs=1e-3)
 
@@ -46,14 +51,18 @@ def test_a_wider_screen_label_widens_the_step_and_a_narrower_one_narrows_it() ->
     formatter: Any = axis_tick_formatter({"mode": case["mode"], "digits": 2})
 
     def step(chars: int | None) -> float:
-        t = date_tick_values(case["lo"], case["hi"], case["plot_px"], case["font_px"], formatter.text, chars)
+        t = date_tick_values(
+            case["lo"], case["hi"], case["plot_px"], case["font_px"], formatter.text, chars
+        )
         return t[1] - t[0]
 
     assert step(case["label_chars"]) == 3 * 3600
     assert step(30) == 4 * 3600 and step(8) == 2 * 3600
 
 
-def test_the_label_width_rides_the_export_request_to_the_ticks(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_label_width_rides_the_export_request_to_the_ticks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """``x_fmt.labelChars`` through the real route: a wide screen label thins the exported ticks."""
     from test_export_date_x_axis import _axes, _body
 

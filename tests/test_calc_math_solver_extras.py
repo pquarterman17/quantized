@@ -218,7 +218,7 @@ def test_system_refusals() -> None:
 @pytest.mark.parametrize("method", ["SLSQP", "trust-constr"])
 def test_a_bound_the_solver_stops_just_short_of_is_still_reported(method: str) -> None:
     # min x^2 + y^2 s.t. x + y >= 1, 0 <= x <= 0.4: the unconstrained line optimum (0.5, 0.5) is out
-    # of the box, so the answer is (0.4, 0.6) with value 0.52. trust-constr stops ~1e-4 short of 0.4.
+    # of the box, so the answer is (0.4, 0.6) with value 0.52. trust-constr stops ~1e-4 short.
     r = minimize_constrained(
         "x^2 + y^2", ["x + y >= 1"], bounds={"x": (0, 0.4), "y": (-5, 5)},
         guess={"x": 0.2, "y": 0.8}, method=method,  # type: ignore[arg-type]
