@@ -19,6 +19,7 @@ import { visibleCurves } from "./browseGraph";
 import { planViewFilter, type FilterPlan } from "./graphFilter";
 import type { RebindState } from "./curveRebind";
 import type { PlotPayload } from "./plotdata";
+import { selectSpan } from "./uplotPointer";
 
 /** The rectangle a Select rows drag painted, in data values on each Y axis the plot has. */
 export interface SliceBox {
@@ -30,13 +31,12 @@ export interface SliceBox {
 
 /** The painted selection box of `u`, or null when there is none. A box as tall as the plot is an X band. */
 export function sliceBoxOf(u: uPlot, hasY2: boolean): SliceBox | null {
-  const { left, top, width, height } = u.select;
-  if (!(width > 0)) return null;
-  const x: [number, number] = [u.posToVal(left, "x"), u.posToVal(left + width, "x")];
+  const [off, len, cOff, cLen, full] = selectSpan(u);
+  if (!(len > 0)) return null;
+  const x: [number, number] = [u.posToVal(off, "x"), u.posToVal(off + len, "x")];
   if (!x.every(Number.isFinite)) return null;
-  const full = u.over?.clientHeight ?? 0;
-  if (!(height > 0) || (full > 0 && height >= full - 1)) return { x };
-  const edges = (scale: string): [number, number] => [u.posToVal(top, scale), u.posToVal(top + height, scale)];
+  if (!(cLen > 0) || (full > 0 && cLen >= full - 1)) return { x };
+  const edges = (scale: string): [number, number] => [u.posToVal(cOff, scale), u.posToVal(cOff + cLen, scale)];
   return { x, y: edges("y"), ...(hasY2 ? { y2: edges("y2") } : {}) };
 }
 

@@ -32,6 +32,7 @@ import type uPlot from "uplot";
 
 import type { PlotPayload } from "./plotdata";
 import type { PlotTool } from "./uplotOpts";
+import { selectSpan, turnedPlot } from "./uplotPointer";
 
 export const MIN_BOX_HEIGHT_PX = 6; // min vertical px for a deliberate y-box.
 
@@ -63,13 +64,14 @@ export function regionYScale(payload: PlotPayload, hasY2: boolean): "y" | "y2" {
 export function regionLiveBoxHook(tool: PlotTool): (u: uPlot) => void {
   return (u: uPlot): void => {
     if (tool !== "region" && tool !== "select") return;
-    const sel = u.select;
-    if (!sel || sel.width <= 0) return;
-    if ((sel.height ?? 0) >= MIN_BOX_HEIGHT_PX) return;
+    const [, len, , cLen, full] = selectSpan(u);
+    if (!u.select || len <= 0 || cLen >= MIN_BOX_HEIGHT_PX) return;
     const band = u.over?.querySelector<HTMLElement>(".u-select");
     if (!band) return;
-    band.style.top = "0px";
-    band.style.height = `${u.over.clientHeight}px`;
+    // The band spans the plot across X's own axis: full height upright, full width on a turned plot.
+    const turned = turnedPlot(u);
+    band.style[turned ? "left" : "top"] = "0px";
+    band.style[turned ? "width" : "height"] = `${full}px`;
   };
 }
 
@@ -101,15 +103,14 @@ export function regionSelectPick(
   hasY2: boolean,
   onRegionSelect: (x0: number, x1: number, y0?: number, y1?: number) => void,
 ): void {
-  const x0 = u.posToVal(u.select.left, "x");
-  const x1 = u.posToVal(u.select.left + u.select.width, "x");
-  const h = u.select.height ?? 0;
-  if (h < MIN_BOX_HEIGHT_PX) {
+  const [off, len, cOff, cLen] = selectSpan(u);
+  const x0 = u.posToVal(off, "x");
+  const x1 = u.posToVal(off + len, "x");
+  if (cLen < MIN_BOX_HEIGHT_PX) {
     onRegionSelect(x0, x1);
   } else {
     const scale = regionYScale(payload, hasY2);
-    const top = u.select.top ?? 0;
-    onRegionSelect(x0, x1, u.posToVal(top, scale), u.posToVal(top + h, scale));
+    onRegionSelect(x0, x1, u.posToVal(cOff, scale), u.posToVal(cOff + cLen, scale));
   }
   u.setSelect({ left: 0, top: 0, width: 0, height: 0 }, false);
 }
@@ -126,17 +127,16 @@ export function selectBoxPick(
   hasY2: boolean,
   onRangeSelect: (x0: number, x1: number, y?: [number, number], y2?: [number, number]) => void,
 ): void {
-  const { left, width } = u.select;
-  const x0 = u.posToVal(left, "x");
-  const x1 = u.posToVal(left + width, "x");
-  const h = u.select.height ?? 0;
-  if (h < MIN_BOX_HEIGHT_PX) {
-    u.setSelect({ left, top: 0, width, height: u.over?.clientHeight ?? h }, false);
+  const [off, len, cOff, cLen, full] = selectSpan(u);
+  const x0 = u.posToVal(off, "x");
+  const x1 = u.posToVal(off + len, "x");
+  if (cLen < MIN_BOX_HEIGHT_PX) {
+    // The band stays painted across the whole plot (full height upright, full width turned).
+    u.setSelect(turnedPlot(u) ? { left: 0, top: off, width: full, height: len } : { left: off, top: 0, width: len, height: full }, false);
     onRangeSelect(x0, x1);
     return;
   }
-  const top = u.select.top ?? 0;
-  const edges = (scale: string): [number, number] => [u.posToVal(top, scale), u.posToVal(top + h, scale)];
+  const edges = (scale: string): [number, number] => [u.posToVal(cOff, scale), u.posToVal(cOff + cLen, scale)];
   const primary = !hasY2 || regionYScale(payload, hasY2) === "y";
   onRangeSelect(x0, x1, primary ? edges("y") : undefined, hasY2 ? edges("y2") : undefined);
 }
