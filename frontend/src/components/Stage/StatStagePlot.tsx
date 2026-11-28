@@ -92,7 +92,10 @@ export default function StatStagePlot({ draw, drawFacets, theme, accent, sel, ri
     <div
       style={{
         position: "absolute",
-        inset: 8,
+        // Longhands in both branches, never `inset`: the flat plot and the facet grid share this div, and React
+        // clears the old `inset` (and with it `top`) without reapplying an unchanged `top`, so the grid sat
+        // under the tool bar until the next resize (acceptance 14, C1).
+        left: 8,
         top: Math.max(8, top),
         right: 8 + right,
         bottom: 8 + foot,
@@ -120,7 +123,7 @@ export default function StatStagePlot({ draw, drawFacets, theme, accent, sel, ri
       ))}
     </div>
   ) : (
-    <div style={{ position: "absolute", inset: 0, top, right, bottom: foot }}>
+    <div style={{ position: "absolute", left: 0, top, right, bottom: foot }}>
       <StatStageCanvas data={shown} theme={theme} accent={accent} {...clickFor(shown)} />
     </div>
   );
