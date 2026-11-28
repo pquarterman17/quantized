@@ -256,12 +256,12 @@ def test_saved_filter_keeps_the_format_choice() -> None:
     assert ds.metadata["import_settings"]["time_formats"] == ["elapsed", None]
 
 
-def test_direct_import_is_unchanged_time_stays_text(tmp_path: Path) -> None:
+def test_direct_import_reads_a_strict_clock_column_like_the_wizard(tmp_path: Path) -> None:
     path = tmp_path / "log.csv"
     path.write_text(_LOG)
     ds = import_csv(path)
-    assert "time_is_clock" not in ds.metadata
-    assert "time_columns" not in ds.metadata
+    assert ds.metadata["time_is_clock"] is True
+    assert ds.metadata["time_columns"] == {"Time": "clock"}
 
 
 def test_wizard_routes_carry_the_choice_over_the_wire() -> None:
