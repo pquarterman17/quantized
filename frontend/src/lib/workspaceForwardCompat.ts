@@ -81,13 +81,16 @@ import type { WorkspaceDocKey } from "./workspaceSerialize";
 import { checkResultRecipe, checkSignalRecipe, RECIPE_GATED_FEATURES } from "./workspaceRecipeCompat"; // NESTED recipe fields: see its header
 import { checkResultRange, checkSavedRois, checkValueGates, groupShapesOn, RESULT_ROW_RANGE, SAVED_ROI_POLYGON } from "./workspaceValueGates";
 
-export type V034Class = "v034" | "gated" | "kept-by-034" | "derived";
+// "safe-drop": v0.34.0 drops the field on open + save, and what is lost is never user data or a view the file
+// depends on (sheet protection: only the lock), so it does not gate the file. Pinned in the test (SAFE_DROP).
+export type V034Class = "v034" | "gated" | "kept-by-034" | "derived" | "safe-drop";
 type Classify<T> = Record<keyof T, V034Class>;
 
 const V = "v034" as const;
 const G = "gated" as const;
 const K = "kept-by-034" as const;
 const D = "derived" as const;
+const S = "safe-drop" as const;
 
 export const PLOT_VIEW: Classify<PlotView> = {
   yScale: V, xScale: V, showGrid: V, showLegend: V, legendPos: V, legendXY: V, legendSize: V, legendFrameXY: V,
@@ -281,6 +284,7 @@ export const DATASET: Classify<Dataset> = {
   // Session-only (lazy-book install counter): never serialized, so 0.34 is unaffected.
   installEpoch: K,
   linkedCurves: G, rowStyle: G, columnProps: G, hiddenCols: G, frozenCols: G, cellRules: G,
+  protectedSheet: S, // lib/sheetProtection.ts: an older release loses only the lock
 };
 
 // Top-level `.dwk` keys added after v0.34.0. 0.34's parseWorkspace builds its

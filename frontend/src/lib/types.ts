@@ -523,6 +523,7 @@ export interface Dataset {
    *  workspace document (.dwk v4) and the store is PR A2's job — this field
    *  is added now so the type is stable underneath that work. */
   workbookId?: string;
+  protectedSheet?: boolean; // sheet protection, no password: edits are refused until unprotected (lib/sheetProtection.ts)
 }
 
 /** A folder in the Library's project tree (project-organization plan, Approach

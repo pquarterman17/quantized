@@ -1,0 +1,38 @@
+.qzk-ss-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.qzk-ss-table th,
+.qzk-ss-table td {
+  text-align: left;
+  padding: 2px 6px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.qzk-ss-table tr[aria-selected="true"] {
+  background: var(--accent-soft);
+}
+.qzk-ss-table .qz-input,
+.qzk-ss-table .qz-select {
+  width: 100%;
+  min-width: 70px;
+}
+.qzk-ss-num {
+  font-family: var(--font-mono);
+  text-align: right;
+}
+.qzk-ss-form {
+  display: grid;
+  gap: 8px;
+  padding: 4px 0;
+}
+.qzk-ss-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.qzk-ss-list {
+  margin: 0;
+  padding-left: 18px;
+}

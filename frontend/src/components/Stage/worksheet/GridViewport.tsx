@@ -38,6 +38,7 @@ import type { CellTint } from "../../../lib/worksheetRules";
 import type { CalcResult, ChannelRole, DataStruct, ModelingType } from "../../../lib/types";
 import GridHeader from "./GridHeader";
 import { gridFormatters, useFormatEpoch } from "./cellFormat";
+import { withFormulaText } from "./formulaView";
 import { CELL_NOTES_KEY } from "../../../lib/rowSidecars";
 import GridRow, { type GridRowCursor, type GridRowProps } from "./GridRow";
 import GridStatsFooter from "./GridStatsFooter";
@@ -127,6 +128,8 @@ export interface GridViewportProps {
   frozenCols?: number;
   onShowCols?: (cols: number[]) => void;
   tintOf?: CellTint; // conditional format (lib/worksheetRules.ts)
+  /** Show formulas (./formulaView.ts): formula columns draw this text instead of their values. */
+  formulaText?: Record<number, string>;
 }
 
 /** What the cursor hook hands the grid: the per-cell marks and handlers
@@ -194,6 +197,7 @@ export default function GridViewport({
   frozenCols = 0,
   onShowCols,
   tintOf,
+  formulaText,
 }: GridViewportProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const { scroll, setScroll, metrics, onScroll } = useGridScroll(scrollRef);
@@ -209,6 +213,7 @@ export default function GridViewport({
   // A column with a user display format (Column Properties) uses that instead.
   const epoch = useFormatEpoch(); const fmtOf = useMemo(() => gridFormatters(data.time, data.values, columnProps, xIsDate || (data.metadata?.time_is_clock === true && "clock")), [data.time, data.values, columnProps, xIsDate, data.metadata, epoch]); // eslint-disable-line react-hooks/exhaustive-deps -- epoch: Numbers prefs rebuild the cell text
 
+  const shownFmt = useMemo(() => withFormulaText(fmtOf, formulaText), [fmtOf, formulaText]);
   const [colWidth, colCount] = [DEFAULT_COL_WIDTH, data.labels.length];
   const gutterWidth = gutterWidthFor(order.length + 1);
   // Per-column widths (MAIN_PLAN #3): resized columns override the default; -1 (x) too.
@@ -290,11 +295,11 @@ export default function GridViewport({
       cellEdit={cellEdit}
       readOnly={readOnly}
       textLayout={textLayout}
-      catLevels={(col) => (col >= baseCount && !mirrors?.[col] ? null : categoricalLevels(data, col))} // a mirror shows its source's labels
+      catLevels={(col) => (formulaText?.[col] !== undefined || (col >= baseCount && !mirrors?.[col]) ? null : categoricalLevels(data, col))} // a mirror shows its source's labels
       onEditCategoricalCell={onEditCategoricalCell}
       onEditCell={onEditCell}
       colName={(col) => (col < 0 ? xName : data.labels[col] ?? `column ${col + 1}`)}
-      fmtOf={fmtOf}
+      fmtOf={shownFmt}
       cursor={cursor && { pos, ...cursor }}
       entry={entry}
       frozenCols={pinnedCols}

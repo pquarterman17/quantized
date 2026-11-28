@@ -42,6 +42,7 @@ import GridViewport from "./GridViewport";
 import HeaderEditor, { type HeaderEditTarget } from "./HeaderEditor";
 import SheetTabs from "./SheetTabs";
 import { useCellRules } from "./useCellRules";
+import { useShowFormulas } from "./formulaView";
 import { useColumnVisibility } from "./useColumnVisibility";
 import { useGridCursor } from "./useGridCursor";
 import { useMirrorBadges } from "./useMirrorBadges";
@@ -127,6 +128,7 @@ function WorksheetPaneView({ ds, windowId, sheetTabs }: { ds: Dataset; windowId?
     setHeaderEdit({ col, x: box?.left ?? 80, y: box?.bottom ?? 80 }); // just under the header
   };
   const colVis = useColumnVisibility(ds, view.selectedCols, view.clearColSelection);
+  const formulas = useShowFormulas(ds); // view only: formula cells draw their text (./formulaView.ts)
   const cursor = useGridCursor(ds, view, {
     onColumnMenu: (col, x, y) => setMenu({ kind: "col", target: col, x, y }),
     onCellMenu: (row, x, y, col) => setMenu({ kind: "cell", target: row, col, x, y }),
@@ -239,7 +241,7 @@ function WorksheetPaneView({ ds, windowId, sheetTabs }: { ds: Dataset; windowId?
         onAnalyzeSelection={view.openSelectionInAnalysisCenter}
         onClearColSelection={view.clearColSelection}
         plotLinked={view.plotLinked}
-        columnView={colVis.controls}
+        columnView={{ ...colVis.controls, sheet: { ds, showFormulas: formulas.on, toggleFormulas: formulas.toggle } }}
       />
 
       {(hasRanges || cursor.range || view.selected.size > 0 || view.selectedCols.size > 0) && (
@@ -354,6 +356,7 @@ function WorksheetPaneView({ ds, windowId, sheetTabs }: { ds: Dataset; windowId?
         frozenCols={colVis.frozen}
         onShowCols={colVis.controls.show}
         tintOf={useCellRules(ds)}
+        formulaText={formulas.cells}
       />
 
       <WorksheetMenus

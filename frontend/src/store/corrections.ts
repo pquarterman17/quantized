@@ -41,6 +41,7 @@ import { recalcNodes, wouldCreateCycle } from "../lib/recalc";
 import type { CorrectionParams } from "../lib/types";
 import { toast } from "./toasts";
 import type { AppState } from "./useApp";
+import { PROTECTED_NOTICE } from "../lib/sheetProtection";
 
 // The apply bodies (store/correctionsRun.ts) load on the first apply (bundle
 // diet slice 21). A failed load is not cached, so the next apply retries.
@@ -147,6 +148,10 @@ function refuseDerived(get: SliceGet, id: string): boolean {
   // while reporting success, so it is refused up front (review finding 3).
   if (ds?.linkedCurves) {
     get().setStatus(LINKED_GRAPH_EDIT_NOTICE);
+    return true;
+  }
+  if (ds?.protectedSheet) {
+    get().setStatus(PROTECTED_NOTICE);
     return true;
   }
   if (!ds?.derivedFrom) return false;

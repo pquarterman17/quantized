@@ -7,6 +7,7 @@
 // still exists, can still be plotted, and formulas still reference it.
 
 import type { ContextMenuItem } from "../../overlays/ContextMenu";
+import type { SheetViewControls } from "./sheetViewItems";
 
 export interface ColumnViewControls {
   /** Every value column's label (index = column). */
@@ -23,6 +24,8 @@ export interface ColumnViewControls {
   /** Freeze columns 0..col. */
   freezeThrough: (col: number) => void;
   unfreeze: () => void;
+  /** The worksheet-level entries (Show formulas, column list, protection), loaded when the menu opens. */
+  sheet?: SheetViewControls;
 }
 
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;

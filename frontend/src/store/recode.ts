@@ -62,6 +62,7 @@ import { toast } from "./toasts";
 import { resolvePendingEdit } from "./pendingEdit";
 import { useRecodePanel } from "./recodePanel";
 import { useApp } from "./useApp";
+import { PROTECTED_NOTICE } from "../lib/sheetProtection";
 
 /** Replace the project's saved mappings as ONE undo step; returning the same list is a no-op. */
 function setSaved(update: (list: SavedRecodeMapping[]) => SavedRecodeMapping[], label: string): void {
@@ -219,6 +220,11 @@ export const useRecode = create<RecodeState>((set, get) => ({
     // A resolved retarget updates `channel` in the panel state too, so the
     // rest of this function (and every later read of `get().channel`) sees
     // the corrected index; a refusal returns with the draft untouched.
+    if (ds.protectedSheet) {
+      toast(PROTECTED_NOTICE, "danger");
+      useApp.getState().setStatus(PROTECTED_NOTICE);
+      return null;
+    }
     const resolved = resolveRecodeChannel(ds.data.labels, channel, openLabel);
     if (!resolved.ok) {
       toast(resolved.reason, "danger");

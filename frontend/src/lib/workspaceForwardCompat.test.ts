@@ -628,6 +628,25 @@ describe("derived and report-spec fields (measured against v0.34.0)", () => {
     expect(newPaths.filter((p) => { const w = classify(p); return w === null || w.startsWith("UNCLASSIFIED"); })).toEqual([]);
   });
 
+  it("the safe-drop set is pinned: a field an older release drops without losing data is a deliberate edit here", () => {
+    const safe = Object.entries(CLASSIFICATIONS).flatMap(([t, m]) => Object.keys(m).filter((k) => m[k] === "safe-drop").map((k) => `${t}.${k}`));
+    expect(safe.sort()).toEqual(["Dataset.protectedSheet"]);
+  });
+
+  it("Dataset.protectedSheet is safe-drop: it round-trips the .dwk, is written, and does not gate the file", () => {
+    const ws = load();
+    ws.datasets[0] = { ...ws.datasets[0], protectedSheet: true };
+    const text = serializeWorkspace(ws);
+    const saved = JSON.parse(text) as { datasets: { protectedSheet?: boolean }[] };
+    expect(saved.datasets[0].protectedSheet).toBe(true); // really written
+    expect(featuresV034WouldDrop(saved)).toEqual([]);
+    expect(version(text)).toBe(4);
+    expect(parseWorkspace(text, VIEWPORT).datasets[0].protectedSheet).toBe(true);
+    // An unprotected sheet writes no key at all.
+    ws.datasets[0] = { ...ws.datasets[0], protectedSheet: undefined };
+    expect(serializeWorkspace(ws)).not.toContain("protectedSheet");
+  });
+
   it("a report figure block's analysis_overlays is kept by 0.34 (opaque spec): still v4", () => {
     expect(REPORT_FIGURE_SPEC.analysis_overlays).toBe("kept-by-034");
     const ws = load();
