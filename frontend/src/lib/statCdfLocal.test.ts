@@ -78,9 +78,8 @@ describe("statsCdf offline", () => {
 });
 
 describe("the Stat Stage's CDF draw with no server", () => {
-  it("draws the local steps, says where they came from, and refuses a fit", async () => {
+  it("draws the local steps, marks them as local, and refuses a fit", async () => {
     const { computeSampleDraw } = await import("../components/Stage/statSampleDraw");
-    const { useApp } = await import("../store/useApp");
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
     const data = { time: [0, 1, 2, 3], values: [[2], [1], [Number.NaN], [2]], labels: ["V"], units: [""], metadata: {} };
     const opts = { valueCol: 0, histCols: [], dist: "norm", bins: "auto", fit: null, valueLabel: "V", cdfY: "count" as const, cdfBand: false };
@@ -89,7 +88,7 @@ describe("the Stat Stage's CDF draw with no server", () => {
     const wire = (draw as { wire: CdfWire }).wire;
     near(wire.series[0].x, [1, 2]);
     near(wire.series[0].y, [1, 3]); // counts at or below: one value <= 1, three <= 2
-    await vi.waitFor(() => expect(useApp.getState().status).toMatch(/computed in the browser/));
+    expect((draw as { wire: CdfWire }).wire.local).toBe(true); // the stage turns this into its note ("computed locally")
     await expect(computeSampleDraw("cdf", data, { ...opts, fit: "norm" } as never)).rejects.toThrow(/needs the server/);
   });
 });

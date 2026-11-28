@@ -14,7 +14,7 @@ export async function statsCdf(
   y: CdfY = "proportion",
   band = false,
   fit?: string | null,
-): Promise<CdfWire & { local?: true }> {
+): Promise<CdfWire> {
   try {
     return await postJSON("/api/statplots/cdf", { columns, y, band, ...(fit ? { fit } : {}) });
   } catch (err) {
