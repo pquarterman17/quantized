@@ -172,11 +172,12 @@ export default function BuiltInPhaseIndexer() {
   return (
     <div style={{ marginBottom: 12, paddingBottom: 10, borderBottom: "1px solid var(--border-subtle)" }}>
       <div className="qzk-helptext" style={hint}>
-        Built-in phase: index peak positions against a phase-database cell, or label its reflections on the plot.
+        Built-in phase: index peak positions against a phase-database cell, or label its reflections on the plot.{" "}
+        <span data-testid="xrd-phase-not-in-preset">(The phase and this section's λ, tolerance and peaks are not saved in presets.)</span>
       </div>
       <div style={grid}>
         <label className="qzk-field-lbl" htmlFor="qz-xrd-phase">Phase</label>
-        <select id="qz-xrd-phase" className="qz-select" value={phase} disabled={!phases}
+        <select id="qz-xrd-phase" className="qz-select" value={phase} disabled={!phases} title="Not part of the reference-pattern presets: changing it does not mark a preset (edited)"
           onChange={(e) => { setPhase(e.target.value); setResult(null); stamp.record(null); }}>
           {!phases && <option value={phase}>{phase}</option>}
           {byCategory.map(([category, list]) => (
