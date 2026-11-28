@@ -23,6 +23,7 @@
 // y-domain (`sharedYDomain`) and each keep their OWN local x-range (the
 // break bounds clamped to the data extent -- see `BreakPanel.xRange`).
 
+import type { ColorScatterSpec } from "./colorscatter";
 import { categoryLevels, resolveCategoryLabels } from "./barlayout";
 import { sliceRowSidecars } from "./rowSidecars";
 import { breakComposition, facetComposition, type Composition } from "./composition";
@@ -199,6 +200,9 @@ export interface BreakPanel {
    *  rows, ascending: what the Select rows box reads to name SHEET rows (lib/panelSheetRows.ts). Absent on
    *  hand-built panels. */
   rows?: readonly number[];
+  /** G24 row states: the colour-scatter spec of each series of this panel that asks for them, keyed by uPlot column
+   *  (1-based), its fills and glyphs aligned to the payload rows (`lib/breakRowStates`). Absent: none. */
+  colorBy?: ReadonlyMap<number, ColorScatterSpec>;
 }
 
 /** Split `data` into one panel per contiguous x-segment implied by `breaks`
