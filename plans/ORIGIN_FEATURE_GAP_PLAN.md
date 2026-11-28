@@ -13,7 +13,7 @@ evidence stays in the appendix `ORIGIN_STUDENT_GAP_FINDINGS.md`.
 **Contracts:** `ROW_RANGE_CONTRACT.md` (items 31, 34) and `PRESET_BAR_CONTRACT.md` (item 40), both accepted 2026-11-26
 **Related:** `SCIENTIFIC_WORKBENCH_REPLACEMENT_PLAN.md` (cross-product journeys and acceptance criteria; its criteria for items 31, 34, 43, 44 and 47 are booked on those items)
 **Created:** 2026-11-25
-**Updated:** 2026-11-28 (wave 16: #1186–#1220 merged, main green; items 7, 10, 11, 12, 13, 21, 23, 24, 33, 35, 40, 42, 45 and 50 complete; 19 items open; acceptance pass 12 and lanes for items 20, 22, 31 and 34 running; owner gate OG22 open; OG15 and OG23 to revisit)
+**Updated:** 2026-11-28 (wave 16: #1186–#1228 merged, #1229 in CI; items 7, 10, 11, 12, 13, 21, 22, 23, 24, 33, 35, 40, 42, 45 and 50 complete; 18 items open; bundle headroom slice 37 freed 5,085 B; owner gate OG22 open; OG15 and OG23 to revisit)
 **Baseline:** `origin/main` at `0f4b7bac0` (v0.45.0 + #1032)
 
 ---
@@ -354,14 +354,14 @@ means that answer. Open:
 
 ## Cross-cutting priorities
 
-The "start here" view: the open work worth doing next, ungated. Items 2, 3, 4, 5, 7, 10, 11, 12, 13, 17, 18, 21, 23, 24, 25, 28, 29, 32, 33, 35, 37, 38, 40, 42, 43, 45 and 50
+The "start here" view: the open work worth doing next, ungated. Items 2, 3, 4, 5, 7, 10, 11, 12, 13, 17, 18, 21, 22, 23, 24, 25, 28, 29, 32, 33, 35, 37, 38, 40, 42, 43, 45 and 50
 are complete; the others shipped their main part and keep the sub-tasks listed under each item.
 
 | # | Item | Workstream | Why first | Model |
 |---|------|------------|-----------|-------|
-| 47 | Acceptance pass 12 over #1210 onward (running); the map formula and extraction jobs and the Curve measurements panel's own modes | W2 | Every pass so far found a wrong value behind a green suite | Sonnet 5.5 |
-| 20, 22 | The #1183 variants under facets, breaks and insets; the box filter on turned and multi-panel plots (lanes running) | W2 | Main parts shipped (#1217) | Sonnet 5.5 |
-| 31, 34 | The polar map and G15 plots under a row window; named-range residue in figures and saved results (lanes running) | W3 | Main parts shipped (#1206, #1207, #1219) | Sonnet 5.5 |
+| 47 | Acceptance pass 13 over #1221 onward; the map formula and extraction jobs and the Curve measurements panel's own modes; pass 4 C9 | W2 | Every pass so far found a wrong value behind a green suite | Sonnet 5.5 |
+| 20 | Violin mean marker and rain points, paired tolerance, 100% split histogram, lollipop whiskers | W2 | Main parts shipped (#1217, #1223) | Sonnet 5.5 |
+| 31, 34 | Break-panel row styles; structure leftovers (protected workbook rename) | W3 | Main parts shipped (#1222, #1224) | Sonnet 5.5 |
 | 9 | The 23 functions Origin cannot fit headless and the other fit-library remainders | W1 | Imported fits cannot find the functions yet | Sonnet 5.5 on the Origin PC |
 ---
 
@@ -463,7 +463,9 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
     - [x] The same pass over #1160–#1166 and pass 7's not-exercised list, pass 8 (2026-11-27): 0 broken, 1 wrong, 2 cosmetic, 4 usability, about 60 checks with numbers (seasonal Mann-Kendall, effect sizes, the binomial detectable effect, ranged commits). Fixed in #1178: the Result book input line now states the recorded range, one reopen notice, the note shortcut per platform, presets ignore hidden knobs, a notice for text symbols on split plots, and Open as worksheet reuses its sheet and keeps the range
     - [x] The same pass over #1167 onward: passes 9, 10 and 11 (#1185, #1205, #1220)
     - [x] Pass 11 over #1186–#1209 (2026-11-28, on `6f0657bca`): about 40 numeric checks work, 0 broken, 2 wrong, 5 cosmetic. The owner's original report (double-click showing two editors) is confirmed fixed. Fixed in #1220: W1 (a CSV pair table's second text column could not feed significance marks), W2 (a Curve Fit from a named range was marked stale at once: the pin release re-seeded its input), the legend double-click by part, Show formulas on range rows only, the solver's active-bound tolerance and a non-unique-system warning, given-centre cluster numbering, date tick steps
-    - [ ] Acceptance pass 12 over #1210 onward
+    - [x] Pass 12 over #1211–#1220 (2026-11-28, on `e0a8b43ba`): 2 broken, 1 wrong, 5 cosmetic. Fixed in #1227: the Sample gallery's cards stacked on one spot, Map stack fit crashed with no maps, text symbols were missing from a colour-by scatter's export, Show formulas from the palette missed the side-by-side Data pane, the heat-map sample opened a stray plot, the solver's zero-derivative wording, facet export axes starting at 0 (a rug's axes-fraction collection was read as error-bar ends)
+    - [x] A CI flake (a Column list rename on a protected sheet) was a real race: a text field's mount-time draft reset could overwrite the first keystrokes (#1228, forced-race test); the same shape fixed in six more fields, the annotation text dialog among them, and a guard test that passed vacuously now reads the real stylesheets (#1229)
+    - [ ] Acceptance pass 13 over #1221 onward
     - [x] Owner gates OG15–OG21 built (2026-11-27): Curve Fit docks in the right column after Style at a 0.6 share, one flip point `RIGHT_DOCKED_TOOLS` (#1148, provisional); a "Toolbar button labels" preference, off by default (#1147); Python 3.14 nightly (#1145); the macOS nightly's ternary wire tests compare floats at rel 1e-9 (#1146)
     - [x] Toolbar button labels on the Map toolbar; the Data window toolbar needed none, since every action already shows its word (#1212)
     - [x] The macOS legs are green after #1146: a full-matrix run on main passed all nine backend legs (Windows, Ubuntu, macOS × Python 3.11, 3.13, 3.14), 2026-11-27
@@ -487,18 +489,9 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
     - [ ] Marginal plots with per-point colour, size or group split; ridgeline with per-ridge normalisation and facets; free numeric overlap and bandwidth
     - [x] Paired before-after, lollipop, stacked histogram (#1078)
     - [x] A half violin on either side with inner marks; paired lines coloured by direction; a horizontal lollipop (dot chart); a stacked histogram split by a group column (#1183)
-    - [ ] The #1183 variants under facets, breaks and insets; a mean marker and rain points on the violin; a "no change" tolerance on the paired direction; a 100% split histogram; whiskers on the horizontal lollipop
+    - [x] The #1183 variants under facets, one panel per level on screen and in export, against numpy per panel; breaks and insets refuse with a note, since the Stat stage has no break or inset panels (#1223)
+    - [ ] A mean marker and rain points on the violin; a "no change" tolerance on the paired direction; a 100% split histogram; whiskers on the horizontal lollipop; a plain histogram under a facet column still ignores the facet silently
     - [ ] Book each type's Origin import mapping in `ORIGIN_PLOT_TYPE_PARITY_PLAN.md`
-
-22. **Browser graph and graph tools** — step one graph through columns or sheets, pick points from a plot into a sheet, Hide Others, an axis scroller, and filtering plotted data from the graph.
-    - Model: **ChatGPT Terra high** (alt Claude Sonnet 5.5, which should also review the state writes). Size L.
-    - Source: B1 (stack browser), B2, G, H1.
-    - [x] Browse a graph through columns and sheets, pick points into a worksheet, an axis scroller, a filter from the graph (#1079; Plot > Browse)
-    - [x] A Pick toolbar button, on-plot pick markers, Pick's own click path, and the scroller on log axes (#1113)
-    - [x] A drag-a-rectangle data slicer (the Select rows box gains Keep only, Extract to a new sheet and Use the box as a data filter), and browsing N curves per step in the Graph browser (#1154)
-    - [x] Scrolling on reciprocal (in 1/x), Y2 and exchanged axes (#1154)
-    - [x] Scrolling on probability axes (in quantiles) and Y3..Y8; a typed legend kept on its slot through a group step (#1217)
-    - [ ] The box filter on turned and multi-panel plots
 
 ### Tier 3 — Nice-to-Have
 
@@ -535,7 +528,8 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
     - [x] R2 remainders: facet, axis-break and spatial plots honour the row window on screen and in export, a named link that is deleted or stale draws no rows, and the overlay and panel wire fixtures (#1207)
     - [x] Slice R3: `__quantized_source_rows` (ungated) on Extract and "Create subset from region", Go to Source rows after sort, insert and delete, random row identity tokens (#1165)
     - [x] R3 remainders: "Create subset from region" asks the source series and the destination workbook; Go to Source rows from the palette and the Library (#1207)
-    - [ ] Row-window residue: the polar map and the G15 plots still draw every row; per-panel windows for other sheets need a contract; row styles are not drawn on a windowed facet or break on screen (the export re-bases them); the worksheet's Extract rows has no checklist or destination
+    - [x] The polar map and the five G15 plots honour the row window on screen and in export, a deleted or stale named link refusing; "Extract rows…" asks the series and destination beside the unchanged one-click Extract (#1224)
+    - [ ] Row-window residue: per-panel windows for other sheets need a contract; break panels draw no row styles on screen (with or without a window) while the export does; ternary and vector-field figures ignore the window
 
 ### Tier 3 — Nice-to-Have
 
@@ -550,7 +544,7 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
     - [x] Slice R4b: `rng("Name")` in aggregate arguments, recalc edges, rename rewrite, cut on delete, cycle refusal, app-only (#1172)
     - [x] Slice R4c: the Name box, the Named Ranges manager (rename, retarget, delete with dependants), plot and analysis from a named range, `rng()` in the formula help (#1175)
     - [x] A live named-range link for plots and analyses (`PlotView.rowRange = { named }`): a plot or fit follows a retarget and row edits, and a deleted or stale range refuses, never widening to every row; Trash restore brings back a sheet's ranges; a copied sheet gets its own range for each one its formulas read (#1195)
-    - [ ] Named-range residue: figure documents keep a snapshot, not a live link; a saved result does not go out of date when its range moves; formulas on another sheet cut by a trashed range stay cut after restore
+    - [x] Named-range residue: live saved figures follow their range and frozen ones say so with "Re-link to range"; a saved result goes out of date when its range's rows change; Trash restore re-reads other sheets' `rng()` formulas (#1222)
     - [x] Show formulas, a column list, sheet protection without a password (every edit path refuses; five unguarded paths found and closed), long ↔ wide time-series pivot against pandas, and inserting a column into every similar sheet (#1206)
     - [x] Structure residue: protected sheets lock Set As, column type, Library rename and delete; macro lines for protect, pivot and insert-into-similar (NOT REPRODUCED in scripts, with reasons); a Show formulas palette entry on the front worksheet (#1219)
     - [ ] Structure leftovers: renaming a workbook that holds a protected sheet is not refused; similar sheets match by labels only
@@ -603,6 +597,7 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
 
 ## Completed
 
+- ~~**#22 Browser graph and graph tools**~~ (2026-11-28, #1154, #1217, #1225 and earlier) — step one graph through columns or sheets, pick points into a sheet, Hide Others, scrolling on probability and Y3+ axes, typed legends kept through a group step, and the box, lasso and pick tools on turned plots and inside one facet or break panel. Not done: a box on a per-channel stack, a page of panels from other sheets or a split grid refuses; Pan, Measure, Region stats, Integrate, Peak/FWHM and Live fit stay off on turned plots.
 - ~~**#24 Plot Details residue**~~ (2026-11-28, #1154, #1156, #1217 and earlier) — per-point text symbols on grouped, encoded, per-series-X and facet views and in graph templates, the subgroup size kept through Vary dash & marker, and the rest of the Plot Details residue. A facet grid split by a group or an encoding, or greying excluded rows, refuses text symbols with a note.
 - ~~**#12 Fit residue**~~ (2026-11-28, #1180, #1193, #1208, #1215, #1219) — a guided standard-curve tool; rank all models by category (AIC, AICc, BIC, adjusted R², reduced χ², Akaike weights over converged models); one model per dataset in Global Fit with shared parameters; a per-pixel fit through a map stack as a job, with parameter, error, χ² and converged maps against per-pixel `curve_fit`. The Pulse family was already present. Not done: map-stack fits are registry models only, unweighted and sequential (~8 ms per pixel).
 - ~~**#42 Format by parts**~~ (2026-11-28, #1211, #1216) — Paste format (choose parts) applies only the ticked parts as one undo step; every format field belongs to one part, checked by the type system; themes are graph templates holding a subset of parts. Not done: legend and plot-title fonts have no store field; Paste format to graphs pastes whole.
