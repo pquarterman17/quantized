@@ -4,9 +4,8 @@
 import { describe, expect, it } from "vitest";
 
 import { lollipopGeometry, lollipopSeries } from "../../lib/statDist3";
-import { draw, plotRect } from "./statRender";
+import { draw, plotRect, type StatDrawData } from "./statRender";
 import { segmentPoints } from "./statLegendSpot";
-import type { StatDrawData } from "./statDrawKinds";
 
 const GROUPS = [[1, 1.2, 0.8, 1.1], [2, 2.4, 1.6, 2.1], [3, 3.6, 2.4, 3.1], [9, 12, 6, 9.5]];
 

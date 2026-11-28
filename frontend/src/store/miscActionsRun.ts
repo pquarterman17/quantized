@@ -80,6 +80,7 @@ export function createMiscActionsRun(set: SliceSet, get: SliceGet): MiscActionsR
       } else {
         get().addDataset(frozen); // single entry point (MAIN_PLAN #9) — one history entry
       }
+      if (opts?.activate !== false) get().setStatus(`froze ${src.name} as ${frozen.name}`, "ok");
       get().recordMacro(`Freeze Copy of ${src.name}`, `qz.freezeCopy(${lit(src.name)})`, {
         kind: "expression",
         params: { id },
