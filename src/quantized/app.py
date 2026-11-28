@@ -76,6 +76,7 @@ from quantized.routes import (
     map_analysis,
     map_grid,
     map_ops,
+    map_stack_fit,
     math_extras,
     model_evaluate,
     optical_gap,
@@ -337,6 +338,7 @@ def create_app(
     application.include_router(magnetic_derived.router)
     application.include_router(aggregate.router)
     application.include_router(map_ops.router)
+    application.include_router(map_stack_fit.router)
     application.include_router(map_grid.router)
     application.include_router(map_analysis.router)
     application.include_router(transform.router)

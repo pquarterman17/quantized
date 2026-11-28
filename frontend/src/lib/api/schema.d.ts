@@ -3418,6 +3418,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/map-stack-fit/job": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stack Fit Job
+         * @description Queue the per-pixel fit; the result is ``{"outputs": [...], "summary": {...}}``.
+         */
+        post: operations["stack_fit_job_api_map_stack_fit_job_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/math-extras/bspline": {
         parameters: {
             query?: never;
@@ -17827,6 +17847,43 @@ export interface components {
             /** X Column */
             x_column?: string | null;
         };
+        /** StackFitRequest */
+        StackFitRequest: {
+            /** Datasets */
+            datasets: {
+                [key: string]: unknown;
+            }[];
+            /** Fixed */
+            fixed?: boolean[] | null;
+            /**
+             * Keep Unconverged
+             * @default false
+             */
+            keep_unconverged?: boolean;
+            /** Layer Names */
+            layer_names: string[];
+            /** Lower */
+            lower?: (number | null)[] | null;
+            /** Model */
+            model: string;
+            /** P0 */
+            p0?: (number | null)[] | null;
+            /** Upper */
+            upper?: (number | null)[] | null;
+            /** X Col */
+            x_col?: number | string | null;
+            /**
+             * X Label
+             * @default x
+             */
+            x_label?: string;
+            /** X Values */
+            x_values: number[];
+            /** Y Col */
+            y_col?: number | string | null;
+            /** Z Col */
+            z_col?: number | string | null;
+        };
         /**
          * StackOptions
          * @description ``kind="histogram"`` of several columns: stack the series on the shared bins.
@@ -25054,6 +25111,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["GridRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stack_fit_job_api_map_stack_fit_job_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StackFitRequest"];
             };
         };
         responses: {
