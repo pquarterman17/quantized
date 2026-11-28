@@ -15,6 +15,15 @@ Conventions, each stated once here:
   axis position to the violin's outline there (the KDE density linearly
   interpolated between its grid points, on the same one density scale as the
   shape), on the side the shape is drawn.
+- **Mean marker.** ``violin_mean`` is ``numpy.mean`` of the finite values, drawn as one
+  point at ``MEAN_OFFSET`` from the axis on the side the shape is drawn (so a split
+  violin's two levels each show their own).
+- **Rain.** The raw finite values as points beside a HALF violin, on the side opposite the
+  shape (a raincloud plot). A point's Y is its value; its X is the axis position moved
+  ``RAIN_GAP`` + ``RAIN_WIDTH`` * (u + 1) / 2 outward, ``u`` being
+  ``statplots.deterministic_jitter(i, "rain<slot>")`` with ``i`` the value's index in the
+  group's list (non-finite values keep their index and draw no point), so the jitter is
+  seeded: the same on screen and in the export, and no point moves when another is dropped.
 """
 
 from __future__ import annotations
@@ -24,7 +33,16 @@ from typing import Any
 import numpy as np
 from numpy.typing import ArrayLike
 
-__all__ = ["MARK_NAMES", "VIOLIN_MARKS", "mark_segments", "violin_quartiles"]
+from quantized.calc.statplots import deterministic_jitter
+
+__all__ = [
+    "MARK_NAMES", "MEAN_OFFSET", "RAIN_GAP", "RAIN_WIDTH", "VIOLIN_MARKS", "mark_segments",
+    "rain_points", "violin_mean", "violin_quartiles",
+]
+
+MEAN_OFFSET = 0.05
+RAIN_GAP = 0.08
+RAIN_WIDTH = 0.25
 
 VIOLIN_MARKS = ("none", "median", "quartiles", "both")
 MARK_NAMES: dict[str, tuple[str, ...]] = {
@@ -62,3 +80,25 @@ def mark_segments(
         out.append({"name": name, "y": y, "x": [float(slot), slot + sign * reach]})
     return out
 
+
+
+def violin_mean(values: ArrayLike) -> float:
+    """``numpy.mean`` of the finite values."""
+    v = np.asarray(values, dtype=float).ravel()
+    v = v[np.isfinite(v)]
+    if v.size == 0:
+        raise ValueError("a violin mean marker needs at least one finite value")
+    return float(np.mean(v))
+
+
+def rain_points(values: ArrayLike, slot: int, sign: float) -> list[list[float]]:
+    """The raincloud points of one half violin drawn on side ``sign`` (+1 right, -1 left):
+    ``[x, y]`` per finite value, on the opposite side, seeded jitter (see the module doc)."""
+    v = np.asarray(values, dtype=float).ravel()
+    seed = f"rain{slot}"
+    out: list[list[float]] = []
+    for i, y in enumerate(v):
+        if np.isfinite(y):
+            u = deterministic_jitter(i, seed)
+            out.append([slot - sign * (RAIN_GAP + RAIN_WIDTH * (u + 1.0) / 2.0), float(y)])
+    return out

@@ -136,6 +136,8 @@ export type StatDrawData =
       series?: { label: string; counts: number[] }[];
       /** Stack the series on the shared bins (item 20), stamped on (`withStack`), never refetched. */
       stack?: boolean;
+      /** With `stack`: each bin normalised to 100 % (stamped on too). */
+      percent?: boolean;
       density: boolean;
       fit?: { x: number[]; pdf: number[]; dist: string };
       valueLabel: string;

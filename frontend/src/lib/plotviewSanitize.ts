@@ -151,6 +151,7 @@ export const VIOLIN_SIDES = ["half", "left", "split"] as const;
 export const VIOLIN_MARKS = ["none", "median", "quartiles", "both"] as const;
 export const LOLLIPOP_STATS = ["mean", "median"] as const;
 export const LOLLIPOP_SORTS = ["none", "asc", "desc"] as const;
+export const LOLLIPOP_WHISKERS = ["none", "sd", "sem", "ci"] as const;
 
 /** A Stat Stage column pick as saved: `[channel index, its label]`, so a
  *  reopen can tell whether the column is still there (`lib/statPicks`). */
@@ -207,6 +208,13 @@ export interface StatPicks {
   pairedDirection?: boolean;
   lollipopHoriz?: boolean;
   histSplit?: boolean;
+  /** Item 20 extras: a mean marker and raincloud points on the violin, the paired "no change" tolerance
+   *  (absolute, 0 = exact equality), a 100 % split histogram, whiskers on the mean lollipop. */
+  violinMean?: boolean;
+  violinRain?: boolean;
+  pairedTol?: number;
+  histPercent?: boolean;
+  lollipopWhisker?: (typeof LOLLIPOP_WHISKERS)[number];
 }
 
 const STAT_PICK_VALUES: Record<string, readonly unknown[]> = {
@@ -216,6 +224,7 @@ const STAT_PICK_VALUES: Record<string, readonly unknown[]> = {
   marginal: MARGINAL_KINDS, ridgeOverlap: RIDGE_OVERLAPS, ridgeBw: RIDGE_BWS,
   violinSide: VIOLIN_SIDES, pairedCi: [true, false], lollipopStat: LOLLIPOP_STATS, lollipopSort: LOLLIPOP_SORTS, histStack: [true, false],
   violinMarks: VIOLIN_MARKS, pairedDirection: [true, false], lollipopHoriz: [true, false], histSplit: [true, false],
+  violinMean: [true, false], violinRain: [true, false], histPercent: [true, false], lollipopWhisker: LOLLIPOP_WHISKERS,
 };
 const isColRef = (r: unknown): r is StatColRef =>
   Array.isArray(r) && r.length === 2 && Number.isInteger(r[0]) && typeof r[1] === "string";
@@ -228,6 +237,7 @@ export function sanitizeStatPicks(v: unknown): StatPicks {
   if (typeof v !== "object" || v === null) return out;
   const o = v as Record<string, unknown>;
   for (const k in STAT_PICK_VALUES) if (STAT_PICK_VALUES[k].includes(o[k])) out[k] = o[k];
+  if (typeof o.pairedTol === "number" && Number.isFinite(o.pairedTol) && o.pairedTol >= 0) out.pairedTol = o.pairedTol;
   const r = o.valueRange;
   if (Array.isArray(r) && r.length === 2 && r[0] < r[1] && r.every(Number.isFinite)) out.valueRange = r;
   if (Array.isArray(o.histCols) && o.histCols.length <= 64 && o.histCols.every((i) => Number.isInteger(i) && i >= 0)) {

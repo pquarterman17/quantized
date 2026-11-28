@@ -13532,6 +13532,12 @@ export interface components {
              * @enum {string}
              */
             type: "lollipop";
+            /**
+             * Whisker
+             * @default none
+             * @enum {string}
+             */
+            whisker?: "none" | "sd" | "sem" | "ci";
         };
         /** LondonRequest */
         LondonRequest: {
@@ -14793,6 +14799,11 @@ export interface components {
             direction?: boolean;
             /** Direction Colors */
             direction_colors?: string[];
+            /**
+             * Tol
+             * @default 0
+             */
+            tol?: number;
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -17152,6 +17163,16 @@ export interface components {
              * @enum {string}
              */
             marks?: "none" | "median" | "quartiles" | "both";
+            /**
+             * Mean
+             * @default false
+             */
+            mean?: boolean;
+            /**
+             * Rain
+             * @default false
+             */
+            rain?: boolean;
             /** Sides */
             sides: ("left" | "right")[];
             /** Slot Labels */
@@ -17889,6 +17910,11 @@ export interface components {
          * @description ``kind="histogram"`` of several columns: stack the series on the shared bins.
          */
         StackOptions: {
+            /**
+             * Percent
+             * @default false
+             */
+            percent?: boolean;
             /**
              * Stack
              * @default true

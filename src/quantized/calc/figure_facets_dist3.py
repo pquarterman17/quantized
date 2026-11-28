@@ -45,8 +45,7 @@ def draw_dist3_panels(
         if kind == "histogram":
             if not is_multi(data):
                 raise ValueError(f"facet {label!r}: a faceted histogram needs one list per group")
-            draw_histogram_multi(ax, data, p.get("labels"), bins, p.get("colors"),
-                                 stack=bool(opts.get("stack")))
+            draw_histogram_multi(ax, data, p.get("labels"), bins, p.get("colors"), opts=opts)
         else:
             draw_dist3_panel(ax, kind, data, p.get("labels"), opts, p.get("colors"), line_width)
         ax.set_title(safe_mathtext_label(label))
