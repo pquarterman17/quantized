@@ -168,10 +168,8 @@ describe("system of equations", () => {
     });
     render(<MathExtrasPanel />);
     pickMode("system");
-    type("Equations", "x + y = 3
-2*x + 2*y = 6");
-    type("Starting values", "x = 1
-y = 1");
+    type("Equations", "x + y = 3\n2*x + 2*y = 6");
+    type("Starting values", "x = 1\ny = 1");
     click(/Calculate/);
     const card = await screen.findByRole("status");
     expect(card).toHaveTextContent("Solution");
