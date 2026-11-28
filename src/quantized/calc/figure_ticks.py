@@ -42,6 +42,7 @@ from matplotlib.ticker import AutoLocator, Formatter, MultipleLocator
 from quantized.calc.axis_categories import CATEGORY_MODE
 from quantized.calc.axis_extras import apply_axis_extras
 from quantized.calc.clock_ticks import CLOCK_MODE, ClockLocator, clock_label
+from quantized.calc.date_ticks import DateLocator
 from quantized.calc.figure_category_ticks import CategoryFormatter, apply_category_axis
 from quantized.calc.figure_tick_hint import HintLocator
 from quantized.calc.tick_hint import TickHint
@@ -296,6 +297,12 @@ def apply_tick_formats(
             locator = axis.get_major_locator()
             if (fmt or {}).get("mode") == CLOCK_MODE and type(locator) is AutoLocator:
                 axis.set_major_locator(ClockLocator())
+            # A calendar mode puts its ticks where the screen does (09:00,
+            # 12:00), not at 5000 s multiples (`calc/date_ticks.py`).
+            is_date = (fmt or {}).get("mode") in ("date", "time", "datetime")
+            auto = type(locator) is AutoLocator
+            if is_date and auto and isinstance(formatter, _AxisTickFormatter):
+                axis.set_major_locator(DateLocator(formatter.text))
     # Figures-audit #6: the Axis dialog's extras ride the same mapping.
     apply_axis_extras(ax, x_fmt, y_fmt)
 

@@ -1,0 +1,131 @@
+{
+  "cases": [
+    {
+      "name": "an afternoon, hourly",
+      "mode": "datetime",
+      "lo": 1772355780,
+      "hi": 1772385960,
+      "plot_px": 572,
+      "font_px": 12,
+      "ticks": [
+        1772366400,
+        1772377200
+      ],
+      "clock": true
+    },
+    {
+      "name": "a morning in minutes",
+      "mode": "datetime",
+      "lo": 1772355800,
+      "hi": 1772360800,
+      "plot_px": 572,
+      "font_px": 12,
+      "ticks": [
+        1772357400,
+        1772359200
+      ],
+      "clock": true
+    },
+    {
+      "name": "ninety seconds",
+      "mode": "datetime",
+      "lo": 1772355607,
+      "hi": 1772355697,
+      "plot_px": 572,
+      "font_px": 12,
+      "ticks": [
+        1772355630,
+        1772355660,
+        1772355690
+      ],
+      "clock": true
+    },
+    {
+      "name": "three days",
+      "mode": "datetime",
+      "lo": 1772343600,
+      "hi": 1772622600,
+      "plot_px": 572,
+      "font_px": 12,
+      "ticks": [
+        1772409600,
+        1772496000,
+        1772582400
+      ],
+      "clock": true
+    },
+    {
+      "name": "a fortnight, date only",
+      "mode": "date",
+      "lo": 1772409600,
+      "hi": 1773619200,
+      "plot_px": 572,
+      "font_px": 12,
+      "ticks": [
+        1772409600,
+        1772668800,
+        1772928000,
+        1773187200,
+        1773446400
+      ],
+      "clock": false
+    },
+    {
+      "name": "a year and a half, months",
+      "mode": "datetime",
+      "lo": 1739253600,
+      "hi": 1787248800,
+      "plot_px": 572,
+      "font_px": 12,
+      "ticks": [
+        1754006400,
+        1769904000,
+        1785542400
+      ],
+      "clock": true
+    },
+    {
+      "name": "eight years",
+      "mode": "date",
+      "lo": 1525305600,
+      "hi": 1788912000,
+      "plot_px": 572,
+      "font_px": 12,
+      "ticks": [
+        1577836800,
+        1640995200,
+        1704067200,
+        1767225600
+      ],
+      "clock": false
+    },
+    {
+      "name": "the date format over less than a day still shows the clock",
+      "mode": "date",
+      "lo": 1772355780,
+      "hi": 1772385960,
+      "plot_px": 572,
+      "font_px": 12,
+      "ticks": [
+        1772366400,
+        1772377200
+      ],
+      "clock": true
+    },
+    {
+      "name": "the time format over a fortnight shows the date",
+      "mode": "time",
+      "lo": 1772409600,
+      "hi": 1773619200,
+      "plot_px": 572,
+      "font_px": 12,
+      "ticks": [
+        1772409600,
+        1772755200,
+        1773100800,
+        1773446400
+      ],
+      "clock": true
+    }
+  ]
+}
