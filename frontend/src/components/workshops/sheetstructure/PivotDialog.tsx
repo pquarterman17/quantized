@@ -16,11 +16,12 @@ import ToolWindowFrame from "../../overlays/ToolWindowFrame";
 import "./sheetStructure.css";
 
 type Mode = "wide" | "long";
+const NO_LABELS: string[] = [];
 
 export default function PivotDialog({ datasetId, onClose }: { datasetId: string; onClose: () => void }) {
   const ds = useApp((s) => s.datasets.find((d) => d.id === datasetId));
   const rows = useMemo(() => (ds && !ds.pending ? analysisData(ds) : null), [ds]);
-  const labels = rows?.labels ?? [];
+  const labels = rows ? rows.labels : NO_LABELS;
   const texts = useMemo(() => (rows ? originTextColumns(rows) : []), [rows]);
   const [mode, setMode] = useState<Mode>("wide");
   const [time, setTime] = useState(-1);

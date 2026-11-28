@@ -84,7 +84,7 @@ export function buildEditDataExtras(s: StoreGet): Action[] {
       group: "Data",
       section: "Recalculation",
       label: "Protect or unprotect sheet",
-      description: "Refuse cell edits, row and column changes, sorts and formula changes on the worksheet until unprotected. No password; viewing, copying, plotting and analysis still work.",
+      description: "Refuse edits, row and column changes, sorts and formula changes on the worksheet until it is unprotected, with no password.",
       keywords: "protect unprotect lock sheet read only worksheet refuse edits password",
       disabled: () => !(s().worksheetId ?? s().activeId),
       disabledReason: "Import or select a dataset first",

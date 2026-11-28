@@ -49,7 +49,8 @@ def _grid(frame: pd.DataFrame) -> dict[str, Any]:
 
 def _cases() -> dict[str, Any]:
     cases: dict[str, Any] = {}
-    cases["pivot_unique"] = {"long": _LONG, "rule": "refuse", "expect": _grid(pd.DataFrame(_LONG).pivot(index="t", columns="k", values="v"))}
+    unique = pd.DataFrame(_LONG).pivot(index="t", columns="k", values="v")
+    cases["pivot_unique"] = {"long": _LONG, "rule": "refuse", "expect": _grid(unique)}
     dup = pd.DataFrame(_DUP)
     with pytest.raises(ValueError):
         dup.pivot(index="t", columns="k", values="v")
@@ -65,7 +66,11 @@ def _cases() -> dict[str, Any]:
         cases[f"melt_skip_{str(skip).lower()}"] = {
             "wide": _WIDE,
             "skipEmpty": skip,
-            "expect": {"time": [float(x) for x in m["t"]], "key": [str(x) for x in m["k"]], "value": [_clean(float(x)) for x in m["v"]]},
+            "expect": {
+                "time": [float(x) for x in m["t"]],
+                "key": [str(x) for x in m["k"]],
+                "value": [_clean(float(x)) for x in m["v"]],
+            },
         }
     return json.loads(json.dumps(cases, default=_clean).replace("NaN", "null"))
 

@@ -38,6 +38,7 @@ export function keyLabels(d: DataStruct, key: PivotKey): { labels: (string | nul
     return { labels, order: levels.filter((l) => present.has(l)) };
   }
   const labels = raw.map((v) => (Number.isFinite(v) ? String(v) : null));
+  // levels-allowlist: numeric pivot keys become columns in ascending order (pandas.pivot), not category levels.
   const order = [...new Set(raw.filter((v) => Number.isFinite(v)))].sort((a, b) => a - b).map(String);
   return { labels, order };
 }

@@ -64,8 +64,10 @@ function aggregate(rule: PivotRule, vs: readonly number[]): number {
 
 /** Long to wide. `keyOrder` lists the key labels in column order; a key not in it is a missing key. */
 export function pivotLongToWide(rows: LongRows, keyOrder: readonly string[], rule: PivotRule): WideTable | { error: string } {
+  // levels-allowlist: key label to column position for the pivot, not a column's category levels.
   const colOf = new Map(keyOrder.map((k, i) => [k, i]));
   const placeable = (i: number): boolean => Number.isFinite(rows.time[i]) && rows.key[i] !== null && colOf.has(rows.key[i] as string);
+  // levels-allowlist: the distinct TIMES of a series, ascending as pandas orders them, not category levels.
   const times = [...new Set(rows.time.filter((_t, i) => placeable(i)))].sort((a, b) => a - b);
   const rowOf = new Map(times.map((t, i) => [t, i]));
   const cells = new Map<number, number[]>(); // rowIndex * width + col -> long values, in row order
