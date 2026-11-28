@@ -24836,6 +24836,174 @@
         "title": "SqliteQueryRequest",
         "type": "object"
       },
+      "StackFitRequest": {
+        "properties": {
+          "datasets": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "minItems": 3,
+            "title": "Datasets",
+            "type": "array"
+          },
+          "fixed": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "boolean"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fixed"
+          },
+          "keep_unconverged": {
+            "default": false,
+            "title": "Keep Unconverged",
+            "type": "boolean"
+          },
+          "layer_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Layer Names",
+            "type": "array"
+          },
+          "lower": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lower"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "p0": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P0"
+          },
+          "upper": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upper"
+          },
+          "x_col": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Col"
+          },
+          "x_label": {
+            "default": "x",
+            "title": "X Label",
+            "type": "string"
+          },
+          "x_values": {
+            "items": {
+              "type": "number"
+            },
+            "title": "X Values",
+            "type": "array"
+          },
+          "y_col": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y Col"
+          },
+          "z_col": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Z Col"
+          }
+        },
+        "required": [
+          "datasets",
+          "layer_names",
+          "x_values",
+          "model"
+        ],
+        "title": "StackFitRequest",
+        "type": "object"
+      },
       "StackOptions": {
         "description": "``kind=\"histogram\"`` of several columns: stack the series on the shared bins.",
         "properties": {
@@ -36296,6 +36464,50 @@
         "summary": "Grid",
         "tags": [
           "map-ops"
+        ]
+      }
+    },
+    "/api/map-stack-fit/job": {
+      "post": {
+        "description": "Queue the per-pixel fit; the result is ``{\"outputs\": [...], \"summary\": {...}}``.",
+        "operationId": "stack_fit_job_api_map_stack_fit_job_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StackFitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Stack Fit Job Api Map Stack Fit Job Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Stack Fit Job",
+        "tags": [
+          "map-stack-fit"
         ]
       }
     },

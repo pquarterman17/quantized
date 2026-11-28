@@ -340,6 +340,14 @@ CASES = [
         lambda ds: {"maps": [{"name": "a", "dataset": ds}], "x": 0.5, "y": 0.5},
         MAP_GOOD,
     ),
+    (
+        "/api/map-stack-fit/job",
+        lambda ds: {
+            "datasets": [ds, ds, ds], "layer_names": ["a", "b", "c"],
+            "x_values": [0.0, 1.0, 2.0], "model": "Linear",
+        },
+        MAP_GOOD,
+    ),
     ("/api/map-analysis/peaks", lambda ds: {"dataset": ds}, PEAK_MAP_GOOD),
     (
         "/api/map-analysis/volume",
