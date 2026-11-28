@@ -115,7 +115,7 @@ class StepTimeRequest(BaseModel):
     low_level: float | None = None
     high_level: float | None = None
     plateau_band: float = 0.1
-    plateau_method: Literal["histogram", "band"] = "histogram"
+    plateau_method: Literal["state", "band"] = "state"
     nonfinite: NonFinite = "error"
 
 
@@ -131,7 +131,7 @@ class StepTimeResponse(BaseModel):
     low_level: float
     high_level: float
     plateaus_estimated: tuple[bool, bool]
-    plateau_method: Literal["histogram", "band"]
+    plateau_method: Literal["state", "band"]
     n_points: int
     dropped: int
     merged_duplicates: int

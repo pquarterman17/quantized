@@ -394,7 +394,7 @@ def step_time(
     low_level: float | None = None,
     high_level: float | None = None,
     plateau_band: float = 0.1,
-    plateau_method: PlateauMethod = "histogram",
+    plateau_method: PlateauMethod = "state",
     nonfinite: NonFinite = "error",
 ) -> StepTimeResult:
     """Rise or fall time: the X distance between two fractions of a step.

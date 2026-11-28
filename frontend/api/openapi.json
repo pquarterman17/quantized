@@ -25850,9 +25850,9 @@
             "type": "number"
           },
           "plateau_method": {
-            "default": "histogram",
+            "default": "state",
             "enum": [
-              "histogram",
+              "state",
               "band"
             ],
             "title": "Plateau Method",
@@ -25928,7 +25928,7 @@
           },
           "plateau_method": {
             "enum": [
-              "histogram",
+              "state",
               "band"
             ],
             "title": "Plateau Method",

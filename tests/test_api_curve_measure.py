@@ -70,7 +70,7 @@ def test_step_time_refuses_a_ramp_with_a_reason_and_reports_the_method(client: T
     step = np.where(t < 5, 1.0, 3.0) + 0.0 * t
     ok = client.post("/api/curve-measure/step-time", json={"x": t.tolist(), "y": step.tolist()})
     assert ok.status_code == 200, ok.text
-    assert ok.json()["plateau_method"] == "histogram"
+    assert ok.json()["plateau_method"] == "state"
     assert ok.json()["low_plateau"] == pytest.approx(1.0) and ok.json()[
         "high_plateau"
     ] == pytest.approx(3.0)

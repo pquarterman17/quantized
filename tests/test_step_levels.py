@@ -19,9 +19,9 @@ def test_hand_computed_levels_and_rise_time() -> None:
     x, y = _hand_step()
     # Range 2..6, 100 bins of 0.04: the lower-half mode is bin 0 (eight 2.0s), the
     # upper-half mode is bin 99 (eight 6.0s), so the states are exactly 2 and 6.
-    assert plateau_levels(y, "histogram", 0.1) == (2.0, 6.0)
+    assert plateau_levels(y, "state", 0.1) == (2.0, 6.0)
     r = step_time(x, y)
-    assert r.plateau_method == "histogram" and r.plateaus_estimated == (True, True)
+    assert r.plateau_method == "state" and r.plateaus_estimated == (True, True)
     # H = 4: 10 % = 2.4 is crossed between x=8 (2.3) and x=9 (3.0): 8 + 0.1/0.7;
     # 90 % = 5.6 between x=11 (5.0) and x=12 (5.7): 11 + 0.6/0.7. Time = 26/7.
     assert (r.low_plateau, r.high_plateau) == (2.0, 6.0)

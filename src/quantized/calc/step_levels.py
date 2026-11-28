@@ -3,7 +3,7 @@
 Pure calc layer (numpy only). Two methods, both returning the low and the high
 plateau of a trace:
 
-``"histogram"`` (the default) -- the *state levels* of IEEE Std 181-2011
+``"state"`` (the default) -- the *state levels* of IEEE Std 181-2011
 (pulse measurement and analysis), section 5.2, the histogram method. The
 samples of the window are binned into ``_BINS`` (100) equal bins between the
 smallest and the largest Y. The bins are split into a lower and an upper half
@@ -34,7 +34,7 @@ from typing import Literal
 import numpy as np
 from numpy.typing import NDArray
 
-PlateauMethod = Literal["histogram", "band"]
+PlateauMethod = Literal["state", "band"]
 
 _BINS = 100
 MIN_SUPPORT = 0.25
@@ -87,8 +87,8 @@ def plateau_levels(
     """
     if method == "band":
         return _band_levels(y, band)
-    if method != "histogram":
-        raise ValueError("plateau_method must be 'histogram' or 'band'")
+    if method != "state":
+        raise ValueError("plateau_method must be 'state' or 'band'")
     low, high = histogram_state_levels(y)
     height = high - low
     if height > 0.0:

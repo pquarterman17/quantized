@@ -16,7 +16,7 @@ const inter = (n: number): IntersectResult => ({
 });
 const STEP: StepTimeResult = {
   edge: "fall", time: 2, x_low: 1, x_high: 3, low_fraction: 0.1, high_fraction: 0.9, low_plateau: 0, high_plateau: 1,
-  low_level: 0.1, high_level: 0.9, plateaus_estimated: [true, true], plateau_method: "histogram", n_points: 8, dropped: 0, merged_duplicates: 0,
+  low_level: 0.1, high_level: 0.9, plateaus_estimated: [true, true], plateau_method: "state", n_points: 8, dropped: 0, merged_duplicates: 0,
 };
 const chip = (over: Partial<GadgetChipState> = {}): GadgetChipState =>
   ({ mode: "intersect", busy: false, error: null, ...over }) as GadgetChipState;

@@ -1,7 +1,7 @@
 // Curve measurements — the controls: which curve(s), then the settings of the
 // chosen measurement. Logic lives in useCurveMeasure.
 
-import { Select } from "../../primitives";
+import { Button, Select } from "../../primitives";
 import { NumberField } from "../../primitives/NumberField";
 import { pickOptions } from "../analysisextras/columnPicks";
 import type { CurveMeasureState } from "./useCurveMeasure";
@@ -121,6 +121,12 @@ export default function CurveMeasureControls({ g }: { g: CurveMeasureState }) {
               <NumberField aria-label="High level" value={s.highLevel} width={84} placeholder="auto" onChange={(v) => g.set("highLevel", v)} />
             </div>
           </div>
+          {s.plateauMethod === "band" && (
+            <div className="qzk-helptext" role="note" style={{ marginTop: 6 }}>
+              Plateaus: band estimate, saved before state levels. Its numbers are kept as saved.{" "}
+              <Button size="sm" disabled={g.busy} onClick={g.remeasure}>Re-measure with state levels</Button>
+            </div>
+          )}
           <div className="qzk-helptext" style={{ marginTop: 6 }}>
             Left empty, the low (base) and high (top) levels are the IEEE Std 181-2011 histogram state levels: the fullest bin of the lower and of the upper half of a 100-bin histogram of Y (the median of that bin&apos;s samples), so noise, spikes and the edge itself do not move them. A trace with no clear two-level shape (a ramp, a pure exponential, an oscillation) is refused with a reason rather than guessed; type the level to measure it anyway. The two percentages (10 / 90 %, or 20 / 80 %) are fractions of the step height above the low level.
           </div>

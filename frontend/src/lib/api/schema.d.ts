@@ -18170,10 +18170,10 @@ export interface components {
             plateau_band?: number;
             /**
              * Plateau Method
-             * @default histogram
+             * @default state
              * @enum {string}
              */
-            plateau_method?: "histogram" | "band";
+            plateau_method?: "state" | "band";
             /** X */
             x: number[];
             /** Y */
@@ -18208,7 +18208,7 @@ export interface components {
              * Plateau Method
              * @enum {string}
              */
-            plateau_method: "histogram" | "band";
+            plateau_method: "state" | "band";
             /** Plateaus Estimated */
             plateaus_estimated: [
                 boolean,
