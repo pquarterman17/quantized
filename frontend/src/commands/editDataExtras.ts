@@ -10,6 +10,8 @@ import type { StoreGet } from "../lib/exportActive";
 import { onLoadFailure, runLazy } from "../lib/runLazy";
 import type { Action } from "../store/commands";
 import { runRepeatLast, runReopenLastDialog } from "../lib/repeatActions";
+import { formulaToggleFor, resolveWorksheetTarget } from "../lib/worksheetTarget";
+import { toast } from "../store/toasts";
 import { requestSetColumnValues } from "../store/setColumnValuesRequest";
 
 export function buildEditDataExtras(s: StoreGet): Action[] {
@@ -79,6 +81,23 @@ export function buildEditDataExtras(s: StoreGet): Action[] {
       run: () => {
         const id = s().worksheetId ?? s().activeId;
         if (id) void runLazy("Loading the column list…", () => import("../components/workshops/sheetstructure/openSheetStructure")).then((m) => m.openColumnList(id), onLoadFailure);
+      },
+    },
+    {
+      // A view of the worksheet in FRONT (lib/worksheetTarget.ts, the front-window rule Export figure uses).
+      id: "show-formulas",
+      group: "Data",
+      section: "Recalculation",
+      label: "Show formulas",
+      description: "Draw each formula cell's text in place of its value in the worksheet in front, and run it again to show values (view only).",
+      keywords: "show formulas view formula text cells toggle worksheet window",
+      run: () => {
+        const target = resolveWorksheetTarget(s());
+        const toggle = target.kind === "worksheet" ? formulaToggleFor(target.key) : null;
+        const reason = toggle ? toggle() : target.kind === "none" ? target.reason : "The worksheet isn't ready yet: wait for it to finish loading, then try again.";
+        if (!reason) return;
+        s().setStatus(reason, "warn");
+        toast(reason, "info");
       },
     },
     {

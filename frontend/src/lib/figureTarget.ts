@@ -50,13 +50,13 @@ const UNBOUND_MAP = "The active map window has no dataset: drag one onto it, or 
 const TAB_NOT_FIGURE = "The Worksheet and Workflow views are not figures: switch to the Plot or Map view first.";
 
 /** Windows on screen: not minimized, and in windows mode not closed in the layout. */
-function onScreen(st: FigureTargetState): PlotWindow[] {
+export function onScreen(st: FigureTargetState): PlotWindow[] {
   const layout = st.layoutMode === "windows" ? st.windowLayout : null;
   return st.plotWindows.filter((w) => w.winState !== "minimized" && (layout === null || layout.placements[`plot:${w.id}`]?.open === true));
 }
 
 /** The front window: highest z, and the later one on a tie (the one painted on top). */
-function frontWindow(windows: readonly PlotWindow[]): PlotWindow | null {
+export function frontWindow(windows: readonly PlotWindow[]): PlotWindow | null {
   return windows.reduce<PlotWindow | null>((front, w) => (front === null || w.z >= front.z ? w : front), null);
 }
 
