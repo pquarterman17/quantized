@@ -21,7 +21,7 @@
 // and this file becomes a LAZY `AppOverlays.tsx` panel like
 // SplitDatasetDialog/QuickPlotWithDialog.
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 
 import { Button } from "../primitives";
 import RichLabelInput from "../primitives/RichLabelInput";
@@ -33,7 +33,7 @@ export default function AnnotationTextDialog() {
   const initial = useAnnotationTextDialog((s) => s.initial);
   const resolve = useAnnotationTextDialog((s) => s.resolve);
   const close = useAnnotationTextDialog((s) => s.close);
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = useState(initial);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const titleId = useId();
   const textId = useId();
@@ -44,9 +44,14 @@ export default function AnnotationTextDialog() {
   // a menu item that is about to unmount, so nothing was focused at all.
   useDialogFocus(dialogRef, title !== null);
 
-  useEffect(() => {
+  // Seed during render each time the dialog is asked (or asked with other text), not in an effect: the
+  // first open of the lazy panel would otherwise paint an empty field for a frame, and anything typed
+  // (or an immediate Enter) in that window would be replaced or lost.
+  const [seen, setSeen] = useState({ title, initial });
+  if (seen.title !== title || seen.initial !== initial) {
+    setSeen({ title, initial });
     if (title !== null) setDraft(initial);
-  }, [title, initial]);
+  }
 
   if (title === null) return null;
 
