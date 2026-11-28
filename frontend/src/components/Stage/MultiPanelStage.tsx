@@ -79,6 +79,7 @@ import { canvasGroupCol } from "../../lib/plotGroupSplit";
 import { useFacetEncoding } from "./useFacetEncoding";
 import { useGreyedFacets } from "./useGreyedFacets";
 import { useFacetTextStyles } from "./useFacetTextStyles";
+import { historyTop, toastWithUndo } from "../../lib/undoToast";
 import { useBreakRowStates } from "./useBreakRowStates";
 import { usePanelBoxSelect } from "./usePanelBoxSelect";
 import { useBreakSeriesStyles } from "./useBreakSeriesStyles";
@@ -232,7 +233,12 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
           aria-label="Single plot"
           className="qzk-tool-btn active"
           title="Back to a single overlaid plot"
-          onClick={() => setStackMode(false)}
+          onClick={() => {
+            const wasBreak = composition?.kind === "break";
+            setStackMode(false);
+            // The layout switch is one undo step; a break is named so a stray click on this button is never silent.
+            if (wasBreak) toastWithUndo("removed the axis break", "info", historyTop());
+          }}
         >
           ◻
         </button>

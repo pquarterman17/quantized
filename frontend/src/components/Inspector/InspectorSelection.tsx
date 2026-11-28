@@ -23,6 +23,7 @@ import {
   usePlotSelection,
 } from "../../store/plotSelection";
 import { openFigureDialog, type FigureDialog } from "../../store/figureDialogs";
+import { useEffectiveComposition } from "../Stage/useEffectiveComposition";
 import { useApp } from "../../store/useApp";
 import { IconButton } from "../primitives/IconButton";
 import { Select } from "../primitives";
@@ -47,6 +48,8 @@ export default function InspectorSelection({ active }: { active: Dataset }) {
   const yKeys = useApp((s) => s.yKeys);
   const seriesOrder = useApp((s) => s.seriesOrder);
   const { data, channelRoles } = active;
+  // An axis-break plot has no on-plot selection, but its curves are still plot objects (Use row states, colours).
+  const onBreak = useEffectiveComposition(active)?.kind === "break";
   const channels = useMemo(
     () => effectiveChannels(data, yKeys, xKey, channelRoles, seriesOrder),
     [data, channelRoles, yKeys, xKey, seriesOrder],
@@ -67,9 +70,9 @@ export default function InspectorSelection({ active }: { active: Dataset }) {
   const options = [
     { value: "", label: "Nothing selected" },
     ...(objectName ? [{ value: OBJECT, label: objectName }] : []),
+    ...(onCanvas || onBreak ? channels.map((c) => ({ value: `series:${c}`, label: curveName(c) })) : []),
     ...(onCanvas
       ? [
-          ...channels.map((c) => ({ value: `series:${c}`, label: curveName(c) })),
           { value: "axis:x", label: AXIS_NAMES.x },
           { value: "axis:y", label: AXIS_NAMES.y },
           ...(hasY2 ? [{ value: "axis:y2", label: AXIS_NAMES.y2 }] : []),
