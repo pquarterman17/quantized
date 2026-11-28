@@ -35,6 +35,6 @@ describe("resolveRangeLink", () => {
 
   it("the figure export refuses a refused link with its reason instead of exporting every row", () => {
     const link = resolveRangeLink("nr1:x", "a", [], [a], "Base");
-    expect(() => windowFigureInputs({ rowRange: link, facetKey: null, xKey: null, yKeys: [0] }, a.data, {})).toThrow(/Plot row range: the named range was removed/);
+    expect(() => windowFigureInputs({ rowRange: link }, a.data, {})).toThrow(/Plot row range: the named range was removed/);
   });
 });

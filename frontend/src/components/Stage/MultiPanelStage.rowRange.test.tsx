@@ -1,13 +1,8 @@
-// The plain per-channel stack honours the plot's row window (ROW_RANGE_CONTRACT 3.3, item 31); a facet, break or
-// spatial arrangement cannot (its panels are built from the whole sheet), so its chip says "this plot kind draws every
-// row" and the figure draws every row too, never a different row set than the chip claims.
+// The plain per-channel stack honours the plot's row window (ROW_RANGE_CONTRACT 3.3, item 31). The facet, break and
+// spatial arrangements honour it too: `MultiPanelStage.windowKinds.test.tsx`.
 import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { buildFigureSpecFromDocument } from "../../lib/figureSpec";
-import { createFigureDocument } from "../../lib/figureDocument";
-import { spatialComposition, type Composition } from "../../lib/composition";
-import { defaultPlotView } from "../../lib/plotview";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import MultiPanelStage from "./MultiPanelStage";
@@ -64,31 +59,5 @@ describe("the per-channel stack", () => {
     expect(created.every((c) => c.data[0].length === 23)).toBe(true);
     expect(screen.getByRole("status").textContent).toContain("rows 21-44 of 200");
     expect(screen.getByRole("status").textContent).not.toContain("draws every row");
-  });
-
-  it("a facet arrangement draws every row and its chip says so", async () => {
-    render(<MultiPanelStage composition={{ kind: "facet", panels: [] } as Composition} />);
-    expect(screen.getByRole("status").textContent).toContain("rows 21-44 · this plot kind draws every row");
-  });
-
-  it("a spatial arrangement draws every row and its chip says so", () => {
-    const spatial = spatialComposition([{ datasetId: "d1", xKey: null, yKeys: [0], xLim: [0, 2], yLim: [1, 3], xLog: false, yLog: false, row: 0, col: 0 }]);
-    render(<MultiPanelStage composition={spatial} />);
-    expect(screen.getByRole("status").textContent).toContain("this plot kind draws every row");
-  });
-});
-
-describe("a facet or break figure draws every row, like its stage; a flat figure the window", () => {
-  const flat = { ...defaultPlotView(), yKeys: [0], rowRange: WINDOW };
-  const spec = (view: typeof flat, facetKey?: number) => buildFigureSpecFromDocument(createFigureDocument({ id: "w", name: "W", datasetId: "d1", view, facetKey }), ds, "s", { fmt: "svg" });
-
-  it("holds the window's rows when flat", () => {
-    expect(spec(flat).dataset.time).toHaveLength(23);
-  });
-
-  it("holds every analysis row when faceted (the window is not applied)", () => {
-    const faceted = spec(flat, 1);
-    expect(faceted.facets?.length ?? 0).toBeGreaterThan(0);
-    expect(faceted.facets?.every((f) => f.x.length > 23)).toBe(true); // 100 rows a level, not the window's 12
   });
 });
