@@ -8,7 +8,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { act, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
-import { createElement } from "react";
+import { createElement, useEffect } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { exportStatplotFigure } from "../../lib/api/figures";
@@ -32,6 +32,7 @@ vi.mock("../../lib/api/figures", async (importOriginal) => ({
 }));
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
+type Facet = { data: number[][]; dist3: Record<string, unknown> };
 const here = dirname(fileURLToPath(import.meta.url));
 const FIX = JSON.parse(readFileSync(join(here, "../../../../tests/fixtures/wire/stat_marks_opts.json"), "utf-8")) as {
   table: { labels: string[]; rows: number[][]; cat_levels: Record<string, string[]>; excluded_rows: number[] };
@@ -62,7 +63,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(exportStatplotFigure).mockResolvedValue(undefined);
   vi.mocked(statsRidgeline).mockImplementation((async (values: number[][]) => {
-    const i = C.ridgeShared.request.facets.findIndex((f: any) => same(f.data, values));
+    const i = (C.ridgeShared.request.facets as Facet[]).findIndex((f) => same(f.data, values));
     if (i < 0) throw new Error("no fixture response for these rows");
     return C.ridgeShared.panels[i].response;
   }) as never);
@@ -188,7 +189,7 @@ async function ridgeStage(shared: boolean, each = false) {
 describe("ridgeline grid on one density scale", () => {
   it("the TS geometry equals the Python geometry on the shared maximum", () => {
     const c = C.ridgeShared;
-    c.panels.forEach((p: any) => {
+    (c.panels as { response: any; geometry: any }[]).forEach((p) => {
       const g = ridgelineGeometry(p.response, 1, false, c.shared_max);
       g.ridges.forEach((r, k) => r.line.forEach(([x, y], i) => {
         expect(x).toBeCloseTo(p.geometry.ridges[k].line[i][0], 10);
@@ -210,7 +211,7 @@ describe("ridgeline grid on one density scale", () => {
       draw(canvas(ctx), host, f.draw);
       const geo = C.ridgeShared.panels[i].geometry;
       const { sx, sy } = mapper(plotRect(600, 400, f.draw), geo.domain, geo.y_domain);
-      const line = geo.ridges[0].line.map(([x, y]: [number, number]): [number, number] => [sx(x), sy(y)]);
+      const line = (geo.ridges[0].line as [number, number][]).map(([x, y]): [number, number] => [sx(x), sy(y)]);
       expect(findPath(paths, line), `panel ${i} first ridge`).toBeDefined();
     });
   });
@@ -218,28 +219,29 @@ describe("ridgeline grid on one density scale", () => {
   it("off, the panels keep their own scale and the request has no maximum", async () => {
     const hook = await ridgeStage(false);
     const req = (await exported(hook)) as any;
-    req.facets.forEach((f: any) => expect(f.dist3).not.toHaveProperty("d_max"));
+    (req.facets as Facet[]).forEach((f) => expect(f.dist3).not.toHaveProperty("d_max"));
     hook.result.current.drawFacets!.forEach((f) => expect((f.draw as any).sharedMax).toBeUndefined());
   });
 
   it("with 'each to its peak' the shared maximum is not sent", async () => {
     const hook = await ridgeStage(true, true);
     const req = (await exported(hook)) as any;
-    req.facets.forEach((f: any) => expect(f.dist3).not.toHaveProperty("d_max"));
+    (req.facets as Facet[]).forEach((f) => expect(f.dist3).not.toHaveProperty("d_max"));
   });
 
   it("the shared-scale checkbox needs a facet column and not 'each', and writes the pick", () => {
     useApp.setState({ statPicks: { mode: "ridgeline" } });
-    let stage: ReturnType<typeof useStatStage> | null = null;
-    function Toolbar() {
-      stage = useWiredStage();
-      return createElement(StatDist2Controls, { st: stage });
+    const seen: { stage?: ReturnType<typeof useStatStage> } = {};
+    function Toolbar({ onStage }: { onStage: (s: ReturnType<typeof useStatStage>) => void }) {
+      const st = useWiredStage();
+      useEffect(() => onStage(st));
+      return createElement(StatDist2Controls, { st });
     }
-    render(createElement(Toolbar));
+    render(createElement(Toolbar, { onStage: (s) => { seen.stage = s; } }));
     const box = () => screen.getByLabelText("shared scale") as HTMLInputElement;
     expect(box().disabled).toBe(true); // no facet column
     expect(box().closest("label")!.title).toMatch(/needs a facet column/i);
-    act(() => stage!.setFacetCol(col("site")));
+    act(() => seen.stage!.setFacetCol(col("site")));
     expect(box().disabled).toBe(false);
     fireEvent.click(box());
     expect(useApp.getState().statPicks).toMatchObject({ ridgeShared: true });
