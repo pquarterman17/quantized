@@ -107,6 +107,14 @@ function Controls({ st }: { st: StatStageState }) {
             onChange={(e) => st.setDist2({ lollipopWhisker: e.target.value as (typeof LOLLIPOP_WHISKERS)[number] })}
           />
         </Picker>
+        <Checkbox
+          checked={d.lollipopCaps && d.lollipopStat === "mean" && d.lollipopWhisker !== "none"}
+          disabled={d.lollipopStat !== "mean" || d.lollipopWhisker === "none"}
+          onChange={(v) => st.setDist2({ lollipopCaps: v })}
+          title={d.lollipopStat === "mean" && d.lollipopWhisker !== "none" ? "A bar across each whisker end" : "Caps need whiskers: pick SD, SEM or 95 % CI first"}
+        >
+          caps
+        </Checkbox>
         <Checkbox checked={d.lollipopHoriz} onChange={(v) => st.setDist2({ lollipopHoriz: v })} title="Categories down the Y axis (a dot chart)">
           horizontal
         </Checkbox>

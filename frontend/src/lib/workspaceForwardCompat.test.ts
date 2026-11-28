@@ -216,6 +216,8 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   "StatPicks.pairedTol": (ws) => editView(ws, (v) => { v.statPicks = { mode: "paired", pairedDirection: true, pairedTol: 0.5 }; }),
   "StatPicks.histPercent": (ws) => editView(ws, (v) => { v.statPicks = { mode: "histogram", histPercent: true }; }),
   "StatPicks.lollipopWhisker": (ws) => editView(ws, (v) => { v.statPicks = { mode: "lollipop", lollipopWhisker: "ci" }; }),
+  "StatPicks.lollipopCaps": (ws) => editView(ws, (v) => { v.statPicks = { mode: "lollipop", ...v.statPicks, lollipopWhisker: "ci", lollipopCaps: true }; }),
+  "StatPicks.ridgeShared": (ws) => editView(ws, (v) => { v.statPicks = { mode: "lollipop", ...v.statPicks, ridgeShared: true }; }),
   "StatMarks.comparisons": (ws) => editView(ws, (v) => { v.statMarks = { box: { comparisons: "brackets" } }; }),
   "StatMarks.compareMethod": (ws) => editView(ws, (v) => { v.statMarks = { box: { compareMethod: "dunnett" } }; }),
   "StatMarks.compareControl": (ws) => editView(ws, (v) => { v.statMarks = { box: { compareControl: "ctrl" } }; }),

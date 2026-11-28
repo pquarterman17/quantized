@@ -21,7 +21,7 @@ points (4-72, default :data:`TEXT_SYMBOL_PT`). Rules shared with the canvas:
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 import numpy as np
@@ -38,6 +38,7 @@ __all__ = [
     "row_texts",
     "text_swatch",
     "text_symbol",
+    "warn_text_source_unresolved",
 ]
 
 TEXT_SYMBOL_PT = 10.0
@@ -47,6 +48,26 @@ TEXT_SWATCH_ATTR = "_qz_text_swatch"
 
 
 TEXT_ROW_MAX_CHARS = 32
+
+
+def warn_text_source_unresolved(
+    specs: Sequence[Mapping[str, Any] | None] | None, where: str
+) -> bool:
+    """Say, once, that a series asks for per-point text (``marker_text_from``: letters, row
+    numbers, a named column) but carries no ``marker_texts``: the client could not read the
+    rows behind ``where``'s points (a facet grid split by a group or an encoding, or one that
+    greys excluded rows), so every point shows the plain text. Never a silent fallback."""
+    if not any(
+        isinstance(s, Mapping) and s.get("marker_text_from") is not None
+        and not isinstance(s.get("marker_texts"), list) for s in specs or []
+    ):
+        return False
+    note_figure_warning(
+        f"Per-point text symbols are not drawn in {where}: the rows behind the points could not "
+        "be read (a grid split by a group or an encoding, one that greys excluded rows, or "
+        "panels that do not line up with the sheet), so those points show the plain symbol text."
+    )
+    return True
 
 
 def row_texts(spec: Mapping[str, Any] | None, n: int) -> list[str | None] | None:

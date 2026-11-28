@@ -44,7 +44,7 @@ describe("StatDist2Controls", () => {
   });
 
   it("marginal: the bin rule only shows for histogram margins", () => {
-    render(<StatDist2Controls st={state({ dist2: { marginal: "rug", ridgeOverlap: 1, ridgeBw: "scott", violinSide: "half", pairedCi: false, lollipopStat: "mean", lollipopSort: "none", histStack: false, violinMarks: "none", pairedDirection: false, lollipopHoriz: false, histSplit: false, violinMean: false, violinRain: false, pairedTol: 0, histPercent: false, lollipopWhisker: "none", ridgeEach: false, marginalSplit: false } })} />);
+    render(<StatDist2Controls st={state({ dist2: { marginal: "rug", ridgeOverlap: 1, ridgeBw: "scott", violinSide: "half", pairedCi: false, lollipopStat: "mean", lollipopSort: "none", histStack: false, violinMarks: "none", pairedDirection: false, lollipopHoriz: false, histSplit: false, violinMean: false, violinRain: false, pairedTol: 0, histPercent: false, lollipopWhisker: "none", lollipopCaps: false, ridgeShared: false, ridgeEach: false, marginalSplit: false } })} />);
     expect(screen.queryByLabelText("bins")).toBeNull();
   });
 

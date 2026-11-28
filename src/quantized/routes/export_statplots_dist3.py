@@ -60,11 +60,14 @@ class LollipopOptions(BaseModel):
     sort: Literal["none", "asc", "desc"] = "none"
     horizontal: bool = False
     whisker: Literal["none", "sd", "sem", "ci"] = "none"  # spread of the mean (mean only)
+    caps: bool = False  # a bar across each whisker end (needs a whisker)
 
     @model_validator(mode="after")
     def _whisker_needs_the_mean(self) -> LollipopOptions:
         if self.whisker != "none" and self.stat != "mean":
             raise ValueError("whiskers are drawn for the mean only")
+        if self.caps and self.whisker == "none":
+            raise ValueError("caps need whiskers: pick SD, SEM or 95 % CI first")
         return self
 
 
@@ -90,6 +93,14 @@ class RidgePanelOptions(BaseModel):
     overlap: float = Field(default=1.0, allow_inf_nan=False)
     bw: Literal["scott", "silverman"] | float = "scott"
     each: bool = False
+    # The density scale shared by every panel of the grid: the tallest peak over all panels.
+    d_max: float | None = Field(default=None, gt=0.0, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def _shared_scale_vs_each(self) -> RidgePanelOptions:
+        if self.d_max is not None and self.each:
+            raise ValueError("a shared scale and 'each to its peak' exclude each other")
+        return self
 
 
 Dist3Options = Annotated[

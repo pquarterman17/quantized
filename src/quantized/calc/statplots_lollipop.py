@@ -37,11 +37,13 @@ from numpy.typing import ArrayLike
 from scipy import stats as sps
 
 __all__ = [
-    "LOLLIPOP_SORTS", "LOLLIPOP_STATS", "LOLLIPOP_WHISKERS", "lollipop_geometry", "lollipop_series",
+    "CAP_HALF", "LOLLIPOP_SORTS", "LOLLIPOP_STATS", "LOLLIPOP_WHISKERS", "lollipop_geometry",
+    "lollipop_series",
 ]
 
 LOLLIPOP_STATS = ("mean", "median")
 LOLLIPOP_WHISKERS = ("none", "sd", "sem", "ci")
+CAP_HALF = 0.15  # a whisker cap's half-length, in category spacings (both renderers)
 _WHISKER_LEGEND = {"sd": "mean ± SD", "sem": "mean ± SEM", "ci": "mean ± 95 % CI"}
 LOLLIPOP_SORTS = ("none", "asc", "desc")
 _PAD = 0.05
@@ -97,12 +99,17 @@ def _half_width(v: Any, whisker: str) -> float | None:
     return sem if whisker == "sem" else float(sps.t.ppf(0.975, v.size - 1)) * sem
 
 
-def lollipop_geometry(result: dict[str, Any], horizontal: bool = False) -> dict[str, Any]:
+def lollipop_geometry(
+    result: dict[str, Any], horizontal: bool = False, caps: bool = False
+) -> dict[str, Any]:
     """The vertices each renderer draws, from a :func:`lollipop_series` result
     (or its JSON): the ``stems`` ([[k, 0], [k, v]]), the ``dots`` and both
     domains, in display order (``horizontal`` swaps the axes, see above). A result with
     ``half`` adds the ``whiskers`` (one segment per group that has one, display order) and
-    the ``legend`` text that names them."""
+    the ``legend`` text that names them. ``caps`` (opt-in, needs whiskers) adds the ``caps``: a
+    short bar across each whisker end, ``CAP_HALF`` category spacings either side."""
+    if caps and "half" not in result:
+        raise ValueError("caps need whiskers: pick SD, SEM or 95 % CI first")
     vals = [result["values"][i] for i in result["order"]]
     halves = [result["half"][i] for i in result["order"]] if "half" in result else None
     ends = [e for v, h in zip(vals, halves or [None] * len(vals), strict=True)
@@ -133,5 +140,12 @@ def lollipop_geometry(result: dict[str, Any], horizontal: bool = False) -> dict[
             for p, v, h in zip(pos, vals, halves, strict=True) if h is not None
         ]
         text = _WHISKER_LEGEND[result["whisker"]]
+        if caps:
+            geo["caps"] = [
+                [[v + s * h, p - CAP_HALF], [v + s * h, p + CAP_HALF]] if horizontal
+                else [[p - CAP_HALF, v + s * h], [p + CAP_HALF, v + s * h]]
+                for p, v, h in zip(pos, vals, halves, strict=True) if h is not None
+                for s in (-1, 1)
+            ]
         geo["legend"] = text + ("; none for one value" if None in halves else "")
     return geo

@@ -22,11 +22,13 @@ export interface RidgelineDraw {
   bw: RidgeBw;
   /** Every ridge scaled to its own peak (else one shared scale). */
   each?: boolean;
+  /** Facet grids: the tallest density over every panel (one shared scale), else this panel's own. */
+  sharedMax?: number;
   valueLabel: string;
 }
 
 export function drawRidgeline(ctx: CanvasRenderingContext2D, rect: Rect, d: RidgelineDraw, ink: string, muted: string) {
-  const geo = ridgelineGeometry(d.wire, d.overlap, d.each);
+  const geo = ridgelineGeometry(d.wire, d.overlap, d.each, d.sharedMax);
   const [x0, x1] = geo.domain;
   const [y0, y1] = geo.y_domain;
   const sx = (v: number) => rect.x + ((v - x0) / (x1 - x0)) * rect.w;

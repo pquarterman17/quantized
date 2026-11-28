@@ -13769,6 +13769,11 @@
       "LollipopOptions": {
         "description": "``kind=\"lollipop\"``: the statistic per group, the display order and whether the\ncategories run down the Y axis (a dot chart).",
         "properties": {
+          "caps": {
+            "default": false,
+            "title": "Caps",
+            "type": "boolean"
+          },
           "horizontal": {
             "default": false,
             "title": "Horizontal",
@@ -21716,6 +21721,18 @@
             ],
             "default": "scott",
             "title": "Bw"
+          },
+          "d_max": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "D Max"
           },
           "each": {
             "default": false,

@@ -28,11 +28,13 @@ export interface RidgelineGeometry {
   ridges: { base: number; fill: [number, number][]; line: [number, number][] }[];
 }
 
-export function ridgelineGeometry(r: RidgelineWire, overlap: number, each = false): RidgelineGeometry {
+/** `sharedMax` (opt-in): the tallest density over every panel of a grid, replacing this panel's own. */
+export function ridgelineGeometry(r: RidgelineWire, overlap: number, each = false, sharedMax?: number): RidgelineGeometry {
+  const top = sharedMax != null && !each ? sharedMax : r.d_max;
   const n = r.groups.length;
   const ridges = r.groups.map((g, k) => {
     const base = n - 1 - k;
-    const scale = overlap / (each ? Math.max(...g.density) : r.d_max);
+    const scale = overlap / (each ? Math.max(...g.density) : top);
     const line = g.x.map((x, i): [number, number] => [x, base + g.density[i] * scale]);
     const fill: [number, number][] = [[line[0][0], base], ...line, [line[line.length - 1][0], base]];
     return { base, fill, line };

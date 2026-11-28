@@ -199,10 +199,11 @@ def draw_ridgeline(
     colors: Sequence[str | None] | None = None,
     line_width: float = 1.0,
     each: bool = False,
+    d_max: float | None = None,
 ) -> None:
     """Draw one filled density ridge per group, first group on top."""
     series = ridgeline_series([list(c) for c in data], bw=bw, n_points=n_points)
-    geo = ridgeline_geometry(series, overlap, each)
+    geo = ridgeline_geometry(series, overlap, each, d_max)
     for k, ridge in enumerate(geo["ridges"]):
         c = _color(colors, k)
         ax.fill(*zip(*ridge["fill"], strict=True), facecolor=c, alpha=RIDGE_ALPHA, linewidth=0,

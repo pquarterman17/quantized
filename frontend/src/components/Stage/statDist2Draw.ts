@@ -140,7 +140,7 @@ export function dist2ExportSpec(
   if (draw?.mode === "ridgeline") {
     const d = draw as RidgelineDraw;
     return {
-      kind: "ridgeline", data: d.groups, labels: d.labels, fmt, ridgeline: { overlap: d.overlap, bw: d.bw, ...(d.each ? { each: true } : {}) },
+      kind: "ridgeline", data: d.groups, labels: d.labels, fmt, ridgeline: { overlap: d.overlap, bw: d.bw, ...(d.each ? { each: true } : {}), ...(d.sharedMax != null && !d.each ? { d_max: d.sharedMax } : {}) },
       x_label: d.valueLabel, filename: `ridgeline_${d.valueLabel}`,
     };
   }

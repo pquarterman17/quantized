@@ -13511,6 +13511,11 @@ export interface components {
          */
         LollipopOptions: {
             /**
+             * Caps
+             * @default false
+             */
+            caps?: boolean;
+            /**
              * Horizontal
              * @default false
              */
@@ -16666,6 +16671,8 @@ export interface components {
              * @default scott
              */
             bw?: ("scott" | "silverman") | number;
+            /** D Max */
+            d_max?: number | null;
             /**
              * Each
              * @default false

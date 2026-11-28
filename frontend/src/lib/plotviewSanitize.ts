@@ -222,6 +222,9 @@ export interface StatPicks {
   pairedTol?: number;
   histPercent?: boolean;
   lollipopWhisker?: (typeof LOLLIPOP_WHISKERS)[number];
+  /** Opt-in: a bar across each lollipop whisker end; one density scale across the panels of a faceted ridgeline. */
+  lollipopCaps?: boolean;
+  ridgeShared?: boolean;
 }
 
 const STAT_PICK_VALUES: Record<string, readonly unknown[]> = {
@@ -232,6 +235,7 @@ const STAT_PICK_VALUES: Record<string, readonly unknown[]> = {
   violinSide: VIOLIN_SIDES, pairedCi: [true, false], lollipopStat: LOLLIPOP_STATS, lollipopSort: LOLLIPOP_SORTS, histStack: [true, false],
   violinMarks: VIOLIN_MARKS, pairedDirection: [true, false], lollipopHoriz: [true, false], histSplit: [true, false],
   violinMean: [true, false], violinRain: [true, false], histPercent: [true, false], lollipopWhisker: LOLLIPOP_WHISKERS,
+  lollipopCaps: [true, false], ridgeShared: [true, false],
 };
 const isColRef = (r: unknown): r is StatColRef =>
   Array.isArray(r) && r.length === 2 && Number.isInteger(r[0]) && typeof r[1] === "string";

@@ -65,6 +65,8 @@ export interface LollipopDraw {
   labels: string[];
   /** Categories down the Y axis, a dot chart (stamped on). */
   horizontal?: boolean;
+  /** Opt-in bars across the whisker ends. */
+  caps?: boolean;
   valueLabel: string;
 }
 
@@ -276,7 +278,7 @@ export const lollipopYLabel = (d: Pick<LollipopDraw, "series" | "valueLabel">): 
 
 export function drawLollipop(ctx: CanvasRenderingContext2D, rect: Rect, d: LollipopDraw, ink: string, muted: string) {
   const horizontal = !!d.horizontal;
-  const geo = lollipopGeometry(d.series, horizontal);
+  const geo = lollipopGeometry(d.series, horizontal, !!d.caps);
   const { sx, sy } = mapper(rect, geo.x_domain, geo.y_domain);
   const names = d.series.order.map((i) => d.labels[i] ?? `group ${i + 1}`);
   if (geo.positions) {
@@ -307,7 +309,7 @@ export function drawLollipop(ctx: CanvasRenderingContext2D, rect: Rect, d: Lolli
   }
   ctx.strokeStyle = ink;
   ctx.lineWidth = 1.2;
-  for (const [a, b] of geo.whiskers ?? []) {
+  for (const [a, b] of [...(geo.whiskers ?? []), ...(geo.caps ?? [])]) {
     trace(ctx, [a, b], sx, sy);
     ctx.stroke();
   }
