@@ -34,6 +34,7 @@ const KM: KmeansResult = {
 const HC: HierarchicalResult = {
   n: 8, p: 2, method: "average", metric: "euclidean", standardize: "zscore", cut_by: "k", k: 2, cut_distance: 3,
   labels: [1, 1, 1, 1, 2, 2, 2, 2], counts: [4, 4], linkage: [[0, 1, 1, 2]], cophenetic_correlation: 0.88,
+  centroids: [[2.5, 2], [6.5, 3]], wcss_by_cluster: [1.5, 2], total_wcss: 3.5,
   dendrogram: {
     n_leaves: 3, leaf_order: [0, 1, 2], leaf_cluster: [1, 1, 2], cut: 3, max_height: 6,
     segments: [
