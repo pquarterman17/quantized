@@ -34,6 +34,10 @@ export async function runSplit(
   ]);
   const { groups, warnings } = computeSplit(src, col, tolerance);
   if (groups.length < 2) {
+    if (col >= src.data.labels.length && groups.length === 0) {
+      toast(`"${src.name}" has no column ${col + 1} to split by (a text column that is gone?). Pick the column again.`, "danger");
+      return [];
+    }
     toast(`"${src.name}" doesn't split into more than one group on that column`, "danger");
     return [];
   }

@@ -70,6 +70,7 @@ export function useSaveByResult(
       datasetId: active.id,
       sourceFingerprint: analysisDataFingerprint(active),
       byColumn,
+      ...(byColumn.index >= active.data.labels.length ? { byColumnIsText: true } : {}),
       headers,
       rows: by.rows,
       omittedLevels: Math.max(0, by.totalLevels - by.levels.length),

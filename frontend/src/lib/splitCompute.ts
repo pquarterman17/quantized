@@ -8,6 +8,7 @@
 // Lazy: loaded by the (lazy) dialog and by the store action's dynamic import.
 
 import { sliceDataStruct, splitColumn, type SplitGroup } from "./datasetsplit";
+import { withTextGroupChannels } from "./groupableColumns";
 import { analyzeSplit, columnName, stampWarnings, type TransformWarning } from "./transformWarnings";
 import type { DataStruct, Dataset } from "./types";
 
@@ -18,8 +19,13 @@ export interface SplitComputed {
 
 /** Group `ds` by column `col` (-1 = x) and say what the split will warn. */
 export function computeSplit(ds: Dataset, col: number, tolerance?: number): SplitComputed {
-  const { groups } = splitColumn(ds, col, tolerance);
-  return { groups, warnings: analyzeSplit(groups, columnName(ds.data, col)) };
+  // A column past the real channels is a CSV text column (lib/groupableColumns): group by its text values.
+  // The groups' row indexes are the sheet's own rows, so `splitChildData` cuts the real data. A column
+  // the sheet does not have splits nothing: no groups, never a group of missing values.
+  const read = withTextGroupChannels(ds);
+  if (col >= read.data.labels.length) return { groups: [], warnings: [] };
+  const { groups } = splitColumn(read, col, tolerance);
+  return { groups, warnings: analyzeSplit(groups, columnName(read.data, col)) };
 }
 
 /** One group's child data, exactly as the split creates it. */

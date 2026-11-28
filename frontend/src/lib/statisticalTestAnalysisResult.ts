@@ -9,6 +9,7 @@ import { restoreSpc } from "./statsTestsSpc";
 import { DEFAULT_PARAMS, STATS_TESTS, testColumns, testDef, type TestParams, type TestSelection } from "./statsTests";
 import type { TestOutput } from "./statsTestsResults";
 import type { DataStruct, Dataset } from "./types";
+import { withTextGroupChannels } from "./groupableColumns";
 import { INPUTS_PARAM, recordedInputs } from "./resultInputsRecord";
 
 export interface StatisticalTestRecipe {
@@ -125,6 +126,8 @@ export function statisticalTestAnalysisResult(
 ): AnalysisResult {
   const def = testDef(testId);
   const bounded = boundedTables(output);
+  // A pick may be a CSV text column (an index past the real channels): its label is the sheet's own text column.
+  const named = source ? withTextGroupChannels(source).data : null;
   const indices = [...new Set(testColumns(testId, selection, params).filter((index) => index >= 0))];
   return {
     version: ANALYSIS_RESULT_VERSION,
@@ -138,8 +141,8 @@ export function statisticalTestAnalysisResult(
         datasetId: source.id,
         channels: indices.map((index) => ({
           index,
-          label: source.data.labels[index] ?? `channel ${index + 1}`,
-          unit: source.data.units[index] ?? "",
+          label: named?.labels[index] ?? `channel ${index + 1}`,
+          unit: named?.units[index] ?? "",
         })),
       },
       sourceFingerprint: analysisDataFingerprint(source),

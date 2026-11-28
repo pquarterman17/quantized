@@ -44,9 +44,10 @@ export default function StatsTestsInputs({ t }: { t: StatsTestsState }) {
   const kind = t.def.input;
   const opts = t.columns.map((c) => ({ value: String(c.index), label: c.label }));
 
-  const pick = (label: string, value: number, onPick: (i: number) => void) => (
+  const groupOpts = t.groupColumns.map((c) => ({ value: String(c.index), label: c.label }));
+  const pick = (label: string, value: number, onPick: (i: number) => void, options = opts) => (
     <Field label={label}>
-      <Select aria-label={label} options={opts} value={String(value)} onChange={(e) => onPick(Number(e.target.value))} />
+      <Select aria-label={label} options={options} value={String(value)} onChange={(e) => onPick(Number(e.target.value))} />
     </Field>
   );
 
@@ -159,7 +160,7 @@ export default function StatsTestsInputs({ t }: { t: StatsTestsState }) {
         ) : (
           <div style={row}>
             {pick("Value", t.sel.x, (x) => t.setSel({ x }))}
-            {pick("Group by", t.sel.byCol, (byCol) => t.setSel({ byCol }))}
+            {pick("Group by", t.sel.byCol, (byCol) => t.setSel({ byCol }), groupOpts)}
           </div>
         )}
       </div>
@@ -169,8 +170,8 @@ export default function StatsTestsInputs({ t }: { t: StatsTestsState }) {
     pickers = (
       <div style={row}>
         {pick("Response", t.sel.x, (x) => t.setSel({ x }))}
-        {pick("Factor A", t.sel.byCol, (byCol) => t.setSel({ byCol }))}
-        {pick("Factor B", t.sel.byCol2, (byCol2) => t.setSel({ byCol2 }))}
+        {pick("Factor A", t.sel.byCol, (byCol) => t.setSel({ byCol }), groupOpts)}
+        {pick("Factor B", t.sel.byCol2, (byCol2) => t.setSel({ byCol2 }), groupOpts)}
       </div>
     );
   } else if (kind === "regression") {
