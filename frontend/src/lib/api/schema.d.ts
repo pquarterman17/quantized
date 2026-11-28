@@ -1824,7 +1824,7 @@ export interface paths {
         put?: never;
         /**
          * Export Worksheet
-         * @description Worksheet (or a selection of it) -> CSV, TSV or Excel, as a download.
+         * @description Worksheet (or a selection of it) -> CSV, TSV, Excel or PDF, as a download.
          */
         post: operations["export_worksheet_api_export_worksheet_post"];
         delete?: never;
@@ -2469,6 +2469,26 @@ export interface paths {
          *     has no synchronous response to attach one to.
          */
         post: operations["scan_job_api_fitting_scan_job_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fitting/standard-curve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Standard Curve Route
+         * @description Fit the standards, then invert every unknown response with its interval.
+         */
+        post: operations["standard_curve_route_api_fitting_standard_curve_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -17779,6 +17799,34 @@ export interface components {
              */
             wavelength?: number;
         };
+        /**
+         * StandardCurveRequest
+         * @description The standards ``(x, y)``, the unknown responses to read off the curve, and the options.
+         */
+        StandardCurveRequest: {
+            /**
+             * Confidence
+             * @default 0.95
+             */
+            confidence?: number;
+            /**
+             * Model
+             * @default linear
+             * @enum {string}
+             */
+            model?: "linear" | "quadratic" | "4pl";
+            /**
+             * Replicates
+             * @default 1
+             */
+            replicates?: number;
+            /** Unknowns */
+            unknowns: number[];
+            /** X */
+            x: number[];
+            /** Y */
+            y: number[];
+        };
         /** StationarityRequest */
         StationarityRequest: {
             /**
@@ -19032,7 +19080,8 @@ export interface components {
         /**
          * WorksheetExportRequest
          * @description ``fmt`` csv/tsv write the FIRST sheet; xlsx writes every sheet as a
-         *     tab. ``header``: write the Long Name (and Units) rows.
+         *     tab and pdf every sheet as printed pages (io/table_pdf.py). ``header``: write the
+         *     Long Name (and Units) rows.
          */
         WorksheetExportRequest: {
             /**
@@ -19045,7 +19094,7 @@ export interface components {
              * @default csv
              * @enum {string}
              */
-            fmt?: "csv" | "tsv" | "xlsx";
+            fmt?: "csv" | "tsv" | "xlsx" | "pdf";
             /**
              * Header
              * @default true
@@ -23316,6 +23365,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ScanRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    standard_curve_route_api_fitting_standard_curve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StandardCurveRequest"];
             };
         };
         responses: {

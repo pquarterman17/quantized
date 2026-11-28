@@ -17,13 +17,16 @@ import { IconButton } from "../../primitives/IconButton";
 import { NumberField } from "../../primitives/NumberField";
 import { Button } from "../../primitives";
 import { fmtNum as fmt } from "../../../lib/format";
+import { lazyRegion } from "../../../lib/lazyRegion";
 import { useWilliamsonHall } from "./useWilliamsonHall";
 
+const WilliamsonHallPresetBar = lazyRegion(() => import("./WilliamsonHallPresetBar"), "Presets");
 const WilliamsonHallBatchSection = lazy(() => import("./WilliamsonHallBatchSection"));
 
 const ROW_COLS = "1fr 1fr 20px";
 
 export default function WilliamsonHallSection() {
+  const t = useWilliamsonHall();
   const {
     rows,
     wavelength,
@@ -48,10 +51,11 @@ export default function WilliamsonHallSection() {
     clear,
     canSaveResult,
     saveResult,
-  } = useWilliamsonHall();
+  } = t;
 
   return (
     <div style={{ marginTop: 10 }}>
+      <WilliamsonHallPresetBar t={t} />
       {fittedPeakCount > 0 && (
         <div style={{ marginBottom: 8 }}>
           <Button size="sm" disabled={fittedBlockedReason != null} onClick={loadFittedPeaks}>

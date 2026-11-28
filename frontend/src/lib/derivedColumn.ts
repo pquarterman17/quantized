@@ -39,6 +39,8 @@ export interface DeriveRequest {
    *  (store/derivedColumnRun.ts shows the contradiction inline), or a
    *  recorded step said so. */
   allowUnitMismatch?: boolean;
+  /** Marks the (first) column as one half of a complex re / im pair (lib/complexPair.ts). */
+  pair?: ComputedColumn["pair"];
 }
 
 export type DeriveOutcome =

@@ -60,6 +60,8 @@ export interface ReflectivityFftState {
   /** Why "→ Library" is unavailable (out of date, or already added); null when it is enabled. */
   addDisabledReason: string | null;
   clear: () => void;
+  /** The section started from a reopened result (the preset bar then says so). */
+  fromResult: boolean;
 }
 
 export function useReflectivityFft(): ReflectivityFftState {
@@ -151,6 +153,9 @@ export function useReflectivityFft(): ReflectivityFftState {
         pick: recordedPickExtra(ds.data.labels, [col]),
       });
       setResult(res);
+      void import("./reflectivityFftPresetAdapter")
+        .then((m) => m.recordReflectivityFftRun(m.presetFromPanel({ columns, col, isNeutron, wavelength, xMin, xMax, windowFn, preprocess, maxThicknessNm, peakProminence })))
+        .catch(() => undefined);
     } catch (e) {
       if (id !== seq.current) return;
       setError(e instanceof Error ? e.message : "reflectivity FFT failed");
@@ -222,5 +227,6 @@ export function useReflectivityFft(): ReflectivityFftState {
     toLibrary,
     addDisabledReason: stale ? "Out of date: the settings or rows changed since this result. Compute again." : commit.disabledReason,
     clear,
+    fromResult: !!seed,
   };
 }

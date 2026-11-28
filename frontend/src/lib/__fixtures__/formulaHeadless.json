@@ -390,6 +390,114 @@
    ]
   },
   {
+   "expr": "abs(complex(B, C))",
+   "app": [
+    3.1622776601684,
+    2.2360679774998,
+    0.5,
+    "NaN",
+    5.3851648071345,
+    "Infinity",
+    7
+   ]
+  },
+  {
+   "expr": "degrees(arg(complex(B, C)))",
+   "app": [
+    161.56505117708,
+    -26.565051177078,
+    90,
+    "NaN",
+    21.801409486352,
+    0,
+    90
+   ]
+  },
+  {
+   "expr": "re(polar(A, B)) + im(polar(A, B))",
+   "app": [
+    -4.5244500186413,
+    0,
+    -7,
+    -0.30116867893976,
+    "NaN",
+    "NaN",
+    -1
+   ]
+  },
+  {
+   "expr": "abs(1 / (1 + 2i * pi * x * 1e-3))",
+   "app": [
+    0.99992105251483,
+    0.99999506523433,
+    1,
+    0.99999876630173,
+    0.99998026137563,
+    0.99982239444759,
+    0.99803190450364
+   ]
+  },
+  {
+   "expr": "re(complex(A, B) * complex(C, x)) / (1 + abs(x))",
+   "app": [
+    -0.66666666666667,
+    0.66666666666667,
+    -3.5,
+    "NaN",
+    "NaN",
+    "-Infinity",
+    -0.63636363636364
+   ]
+  },
+  {
+   "expr": "im(exp(complex(0, x)) ^ 2)",
+   "app": [
+    0.75680249530793,
+    -0.8414709848079,
+    0,
+    0.4794255386042,
+    0.90929742682568,
+    -0.27941549819893,
+    0.91294525072763
+   ]
+  },
+  {
+   "expr": "re(A) + im(A) + conj(A) + real(A) + imag(A) + arg(A) + np.angle(A)",
+   "app": [
+    12,
+    0,
+    -14.71681469282,
+    3,
+    "NaN",
+    7.5,
+    3.2831853071796
+   ]
+  },
+  {
+   "expr": "complex(A, B)",
+   "app": [
+    "NaN",
+    "NaN",
+    "NaN",
+    "NaN",
+    "NaN",
+    "NaN",
+    "NaN"
+   ]
+  },
+  {
+   "expr": "atan(complex(A, 0)) + im(2j + 1e-1i)",
+   "app": [
+    3.425817663668,
+    2.1,
+    0.67110072780927,
+    2.8853981633974,
+    "NaN",
+    3.2902899496825,
+    1.3146018366026
+   ]
+  },
+  {
    "expr": "A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A",
    "app": [
     4000,
@@ -450,19 +558,6 @@
   "datediff(A, B, \"day\")",
   "A and B",
   "not A",
-  "complex(A, B)",
-  "abs(complex(B, C))",
-  "degrees(arg(complex(B, C)))",
-  "polar(A, B)",
-  "2i",
-  "A + 0.5j",
-  "abs(1 / (1 + 2i * pi * x * 1e-3))",
-  "re(A)",
-  "im(A)",
-  "conj(A)",
-  "real(A) + imag(A)",
-  "angle(A)",
-  "np.angle(A)",
   "A\n+ 1",
   "A +\r1",
   "1e400 + A",

@@ -3,10 +3,11 @@
 Owner policies (2026-11-24, ``quick_converter_frozen.md``):
 
 * **Multi-dataset inputs.** Containers (``xlsx``, ``h5``/``nxs``, ``mat``,
-  ``json``, ``npz``) -> ONE file with a sheet / group / struct per dataset;
+  ``json``, ``npz``, ``sqlite``, ``xml``, ``nc``) -> ONE file with a sheet / group / struct /
+  table per dataset;
   flat formats (``csv``, ``xy``) -> one file per dataset.
 * **Metadata.** A ``#``-comment header in ``csv`` / ``xy``; native attributes
-  or fields in ``h5``/``nxs``/``mat``/``json``/``npz``; a ``metadata`` sheet in
+  or fields in the container formats (``h5`` ... ``nc``); a ``metadata`` sheet in
   Excel.
 * **2-D maps** (``metadata.is2D``) to flat formats: a lossless long table, one
   row per point, every coordinate and signal a column (2theta, omega, I, Qx,
@@ -42,8 +43,10 @@ __all__ = [
 ]
 
 FLAT_FORMATS = ("csv", "xy")
-CONTAINER_FORMATS = ("xlsx", "h5", "nxs", "mat", "json", "npz")
-ALL_FORMATS = ("csv", "xlsx", "xy", "h5", "nxs", "mat", "json", "npz")
+CONTAINER_FORMATS = ("xlsx", "h5", "nxs", "mat", "json", "npz", "sqlite", "xml", "nc")
+ALL_FORMATS = (
+    "csv", "xlsx", "xy", "h5", "nxs", "mat", "json", "npz", "sqlite", "xml", "nc",
+)
 FORMAT_SUFFIX = {f: f".{f}" for f in ALL_FORMATS}
 XLSX_TAB_MAX = 31
 

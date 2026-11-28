@@ -8,9 +8,12 @@ import { Button } from "../../primitives";
 import { Checkbox } from "../../primitives/Checkbox";
 import { NumberField } from "../../primitives/NumberField";
 import { WorkbenchPreviewFrame } from "../workbench/WorkbenchParts";
+import { lazyRegion } from "../../../lib/lazyRegion";
 import SimsOffsets from "./SimsOffsets";
 import SimsPreviewPlot from "./SimsPreviewPlot";
 import { useSimsCompare, MAX_STAGGER, type SimsCompareState } from "./useSimsCompare";
+
+const SimsComparePresetBar = lazyRegion(() => import("./SimsComparePresetBar"), "Presets");
 
 const gap = { marginTop: 8 };
 const faint = { color: "var(--text-faint)" } as const;
@@ -48,6 +51,7 @@ export default function SimsCompareView({ active }: { active: boolean }) {
   const r = useSimsCompare(active);
   return (
     <div>
+      <SimsComparePresetBar r={r} />
       <label className="qzk-field-lbl">Profiles</label>
       <div role="group" aria-label="Profiles" style={list}>
         {r.datasets.map((d) => (
