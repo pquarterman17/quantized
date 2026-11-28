@@ -78,6 +78,7 @@ import { metadataFeaturesOf } from "./workspaceMetadataGate";
 import { GATED_METADATA_FEATURES, NEW_SINCE_V038, NEW_SINCE_V041, NEW_SINCE_V045 } from "./workspaceRungSets";
 export { NEW_SINCE_V038, NEW_SINCE_V041, NEW_SINCE_V045 }; // the rung sets live in workspaceRungSets.ts
 import type { WorkspaceDocKey } from "./workspaceSerialize";
+import { checkResultRecipe, checkSignalRecipe, RECIPE_GATED_FEATURES } from "./workspaceRecipeCompat"; // NESTED recipe fields: see its header
 import { checkResultRange, checkValueGates, groupShapesOn, RESULT_ROW_RANGE } from "./workspaceValueGates";
 
 export type V034Class = "v034" | "gated" | "kept-by-034" | "derived";
@@ -371,7 +372,7 @@ export function featuresV045WouldDrop(doc: unknown): string[] {
 }
 
 /** A field value v0.34.0 drops although the field itself is a v0.34 one. */
-export const GATED_VALUES: readonly string[] = ["AxisFormat.base=2", "Shape.kind=measure", "OverrideShape.kind=measure", "Map3dView.ext", "Map3dView.kind=bars_vectors", "PlotOverlays.groupShapes", RESULT_ROW_RANGE, ...GATED_METADATA_FEATURES];
+export const GATED_VALUES: readonly string[] = ["AxisFormat.base=2", "Shape.kind=measure", "OverrideShape.kind=measure", "Map3dView.ext", "Map3dView.kind=bars_vectors", "PlotOverlays.groupShapes", RESULT_ROW_RANGE, ...RECIPE_GATED_FEATURES, ...GATED_METADATA_FEATURES];
 
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -406,7 +407,7 @@ export function featuresV034WouldDrop(doc: unknown): string[] {
   // Typed containers, by path. Dataset cells (`data`/`raw`) are never walked; only their metadata KEYS are read.
   const datasets = Array.isArray(doc.datasets) ? doc.datasets : [];
   for (const d of datasets) { checkType(d, "Dataset", found); for (const f of metadataFeaturesOf(d)) found.add(f); }
-  for (const r of Array.isArray(doc.analysisResults) ? doc.analysisResults : []) checkResultRange(r, found);
+  for (const r of Array.isArray(doc.analysisResults) ? doc.analysisResults : []) { checkResultRange(r, found); checkResultRecipe(r, found); }
   for (const w of Array.isArray(doc.plotWindows) ? doc.plotWindows : []) {
     checkType(w, "PlotWindow", found);
     if (isObj(w)) checkDocument(w.document, found);
@@ -429,6 +430,7 @@ export function featuresV034WouldDrop(doc: unknown): string[] {
       return;
     }
     if (!isObj(v)) return;
+    checkSignalRecipe(v, found);
     if ("seriesStyles" in v && "yFmt" in v) checkType(v, "mark" in v && "axisBreaks" in v ? "RecipeVisual" : "PlotView", found);
     if (key === "xFmt" || key === "yFmt" || key === "y2Fmt") checkType(v, "AxisFormat", found);
     if (key === "overlays" && groupShapesOn(v)) found.add("PlotOverlays.groupShapes");
