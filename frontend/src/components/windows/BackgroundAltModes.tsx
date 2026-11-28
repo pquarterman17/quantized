@@ -38,6 +38,7 @@ import { useBreakSeriesStyles, useWindowCycles } from "../Stage/useBreakSeriesSt
 import { useRampedStyles } from "../Stage/useSeriesRamp";
 import { useFacetEncoding } from "../Stage/useFacetEncoding";
 import { useGreyedFacets } from "../Stage/useGreyedFacets";
+import { windowedDataset } from "../../lib/rowWindowDataset";
 import { stackDataset } from "../Stage/stackRows";
 import { useMultiPanelStage } from "../Stage/useMultiPanelStage";
 import { useStatStage } from "../Stage/useStatStage";
@@ -159,13 +160,14 @@ export function BackgroundStackWindow({ dataset, view, bg, composition = null, e
   const instanceId = useId();
   // F4.2c (a): the app-wide "Excluded rows" mode greys the facet grid here too.
   const excludedDisplay = useApp((s) => s.excludedDisplay);
+  const rows = useMemo(() => windowedDataset(dataset, view.rowRange), [dataset, view.rowRange]); // the sheet's rows the panels are built from
   const encodedFacets = useFacetEncoding(
-    dataset, encoding, canvasGroupCol(view.groupKey, view.y2Keys), view.y2Keys, view.facetKey,
+    rows, encoding, canvasGroupCol(view.groupKey, view.y2Keys), view.y2Keys, view.facetKey,
     view.xKey, view.yKeys, view.seriesLabels, view.seriesStyles, excludedDisplay,
   );
-  const shown = useGreyedFacets(composition, dataset, view.facetKey, view.xKey, excludedDisplay);
+  const shown = useGreyedFacets(composition, rows, view.facetKey, view.xKey, excludedDisplay);
   const rampedStyles = useRampedStyles(view, dataset, document); // G1: the gradient, as the flat plot
-  const breakSeriesStyles = useBreakSeriesStyles(useWindowCycles(view, document), composition, dataset, { ...view, seriesStyles: rampedStyles });
+  const breakSeriesStyles = useBreakSeriesStyles(useWindowCycles(view, document), composition, rows, { ...view, seriesStyles: rampedStyles });
   const stackActive = useMemo(() => stackDataset(dataset, composition === null ? view.rowRange : null), [dataset, composition, view.rowRange]); // the rows the flat plot draws
   const { hostRef, hostStyle } = useMultiPanelStage({
     active: stackActive,

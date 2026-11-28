@@ -19,6 +19,8 @@ import { mapColumn } from "./plotColumnOps";
 import type { PlotPayload } from "./plotdata";
 import type { RowRange } from "./rowRange";
 
+export { windowedDataset } from "./rowWindowDataset"; // loaded with the window by `lib/rowWindowLoader`
+
 /** The dataset row behind payload row `i`: a reduced payload names it
  *  (`rowIds`), a waterfall X-offset one repeats each row per block. */
 function sourceRow(payload: PlotPayload, i: number): number {

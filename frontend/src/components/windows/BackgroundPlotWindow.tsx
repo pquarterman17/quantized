@@ -44,6 +44,7 @@ import type uPlot from "uplot";
 
 import type { ErrorBinding } from "../../lib/errorRoles";
 import { durableComposition } from "../../lib/facet";
+import { useWindowedSheet } from "../../lib/rowWindowLoader";
 import type { FigureDocument } from "../../lib/figureDocument";
 import { fitFromDocument } from "../../lib/figureOverlays";
 import { frozenFigureDataset } from "../../lib/frozenFigureDataset";
@@ -127,9 +128,11 @@ export default function BackgroundPlotWindow({
   // dataset's analysis view at all", because the break guard was briefly lost
   // in a refactor and this comment silently became false for every plain XY
   // figure in every background window (round 3, finding 2).
+  // The view's row window narrows the sheet the panels are built from (lib/rowWindowDataset), as the focused stage's.
+  const windowed = useWindowedSheet(renderDataset, view.rowRange);
   const composition = useMemo(
-    () => durableComposition(renderDataset, view.facetKey, document?.plot.axisBreaks.x, view.xKey, view.yKeys),
-    [renderDataset, view.facetKey, document?.plot.axisBreaks.x, view.xKey, view.yKeys],
+    () => durableComposition(windowed, view.facetKey, document?.plot.axisBreaks.x, view.xKey, view.yKeys),
+    [windowed, view.facetKey, document?.plot.axisBreaks.x, view.xKey, view.yKeys],
   );
   if (!renderDataset) {
     return (

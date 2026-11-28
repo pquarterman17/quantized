@@ -71,6 +71,7 @@ import type { Composition } from "../../lib/composition";
 import { spatialPanelsOf } from "../../lib/composition";
 import { runExportSpatialPageCommand } from "../../lib/exportPageCommand";
 import { canvasLineWidth, resolveTemplate } from "../../lib/plotTemplates";
+import { windowedDataset } from "../../lib/rowWindowDataset";
 import { canExportSpatialPage } from "../../lib/spatialPageExport";
 import { resolvePlotBg } from "../../lib/uplotOpts";
 import { useActiveDataset, useApp } from "../../store/useApp";
@@ -124,7 +125,7 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
   // header keeps it store-free (types only) so a background window can drive it
   // from its own snapshot. Only the SPATIAL mode acts on it; see the param doc.
   const autoSeriesStyles = useApp((s) => s.autoSeriesStyles);
-  const rowRange = useApp((s) => s.rowRange); // the plain stack draws only these rows; a facet, break or spatial arrangement draws every row
+  const rowRange = useApp((s) => s.rowRange); // every arrangement draws only these rows (a spatial one: the panels of this sheet)
   const excludedDisplay = useApp((s) => s.excludedDisplay); // SPATIAL here; the facet grid via `useGreyedFacets`
   const y2Keys = useApp((s) => s.y2Keys);
   const errKeys = useApp((s) => s.errKeys);
@@ -142,20 +143,25 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
   const facetKey = useApp((s) => s.facetKey);
   const groupKey = useApp((s) => s.groupKey);
   const picks = useApp((s) => s.plotWindows.find((w) => w.id === s.focusedWindowId)?.document?.bindings.encoding);
+  const rows = useMemo(() => windowedDataset(active, rowRange), [active, rowRange]); // the sheet's rows the facet and break panels are built from
   const encodedFacets = useFacetEncoding(
-    active, picks, canvasGroupCol(groupKey, y2Keys), y2Keys, facetKey, xKey, yKeys, seriesLabels, seriesStyles,
+    rows, picks, canvasGroupCol(groupKey, y2Keys), y2Keys, facetKey, xKey, yKeys, seriesLabels, seriesStyles,
     excludedDisplay,
   );
-  const shown = useGreyedFacets(composition, active, facetKey, xKey, excludedDisplay); // F4.2c (a)
+  const shown = useGreyedFacets(composition, rows, facetKey, xKey, excludedDisplay); // F4.2c (a)
   const rampedStyles = useFocusedRampedStyles(active, useApp((s) => s.plotWindows.find((w) => w.id === s.focusedWindowId)?.document)); // G1, as the flat plot
   // S1 (b): an x-break exports as the flat figure, so its panels cycle exactly when that figure does.
   const breakSeriesStyles = useBreakSeriesStyles(
-    selectFocusedWindowCycles, composition, active, { xKey, yKeys, seriesOrder, seriesStyles: rampedStyles },
+    selectFocusedWindowCycles, composition, rows, { xKey, yKeys, seriesOrder, seriesStyles: rampedStyles },
   );
   const stackActive = useMemo(() => stackDataset(active, composition === null ? rowRange : null), [active, composition, rowRange]); // the rows the flat plot draws
+  // A spatial panel set draws each panel over its OWN sheet: the panels of THIS sheet are cut to the window; a panel
+  // of another sheet has no rows the window can name, so it draws all of them and the chip says so.
+  const spatialSheets = useMemo(() => (spatialPanels && rowRange ? datasets.map((d) => (d.id === active?.id ? windowedDataset(d, rowRange) : d)) : datasets), [spatialPanels, rowRange, datasets, active?.id]);
+  const otherSheets = spatialPanels && rowRange ? spatialPanels.some((p) => p.datasetId !== active?.id) : false;
   const { hostRef, hostStyle, readout, tool, spatialLegends } = useMultiPanelStage({
     active: stackActive,
-    datasets,
+    datasets: spatialSheets,
     composition: shown,
     panelFit,
     pageSetup,
@@ -197,7 +203,7 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
   return (
     <div className="qzk-stage">
       <div ref={hostRef} style={hostStyle} />
-      <PlotRowRangeChip drawsEvery={composition !== null} />
+      <PlotRowRangeChip drawsEvery={false} note={otherSheets ? "panels of other sheets draw every row" : undefined} />
       {showLegend
         ? spatialLegends.map((legend) =>
             createPortal(

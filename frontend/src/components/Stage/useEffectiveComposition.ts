@@ -30,6 +30,7 @@ import { useMemo } from "react";
 
 import { breakPanelsOf, facetPanelsOf, spatialPanelsOf, type Composition } from "../../lib/composition";
 import { breakCompositionFromBreaks, durableComposition } from "../../lib/facet";
+import { useWindowedSheet } from "../../lib/rowWindowLoader";
 import type { Dataset } from "../../lib/types";
 import { useApp, type AppState } from "../../store/useApp";
 
@@ -47,6 +48,11 @@ export function useEffectiveComposition(active: Dataset | null): Composition | n
   const xKey = useApp((s) => s.xKey);
   const yKeys = useApp((s) => s.yKeys);
   const xBreaks = useApp(focusedXBreaks);
+  const rowRange = useApp((s) => s.rowRange);
+  // The plot's row window narrows the sheet the panels are built from (ROW_RANGE_CONTRACT 3.3), here and in the
+  // export (`lib/rowWindowDataset`): a facet grid or an axis break holds the window's rows only. Null while that
+  // lazy code loads: no rows, never every row.
+  const rows = useWindowedSheet(active, rowRange);
   return useMemo(
     // `lib/facet.durableComposition` owns the fallback AND its facet-beats-
     // break precedence -- the same function the P4.2 matrix's screen leg
@@ -57,10 +63,11 @@ export function useEffectiveComposition(active: Dataset | null): Composition | n
     // collapses it here exactly where the export drops `x_breaks` (lib/figureSpec.ts).
     () => {
       const src = rawComposition?.kind === "break" ? rawComposition.source : undefined;
-      const live = src && active ? breakCompositionFromBreaks(active, src.breaks, src.xKey, src.yKeys) : rawComposition;
-      return live ?? durableComposition(active, facetKey, xBreaks, xKey, yKeys);
+      let live = src ? breakCompositionFromBreaks(rows, src.breaks, src.xKey, src.yKeys) : rawComposition;
+      if (live?.kind === "facet" && rows !== active) live = null; // rebuilt over the window just below, from the same binding
+      return live ?? durableComposition(rows, facetKey, xBreaks, xKey, yKeys);
     },
-    [rawComposition, active, facetKey, xKey, yKeys, xBreaks],
+    [rawComposition, active, rows, facetKey, xKey, yKeys, xBreaks],
   );
 }
 
