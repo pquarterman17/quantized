@@ -18,6 +18,7 @@ import { currentNamedRanges } from "./namedRangeSource";
 import { resolveRangeLink } from "./rangeLink";
 import { rowRangeLabel, type RowRange } from "./rowRange";
 import type { Dataset } from "./types";
+import { sameFingerprint } from "./textFingerprint";
 
 export interface RecordedRangeTarget extends RecordedRowRange {
   datasetId: string;
@@ -38,7 +39,7 @@ export function recordedRowsCurrent(result: AnalysisResult, datasets: readonly D
   if (result.stale || !result.sourceFingerprint) return false;
   const now = sourcesFingerprint(result, new Map(datasets.map((d) => [d.id, d])));
   // A named range it read moved (a retarget changes no data): not the rows it read, whatever the fingerprint says.
-  return now !== null && now === result.sourceFingerprint && rangeChangeNotes(result, datasets).length === 0;
+  return now !== null && sameFingerprint(result.sourceFingerprint, now) && rangeChangeNotes(result, datasets).length === 0;
 }
 
 export type RecordedRangePlan =

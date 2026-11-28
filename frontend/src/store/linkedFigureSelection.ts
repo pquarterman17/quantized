@@ -2,6 +2,7 @@ import { analysisDataFingerprint } from "../lib/analysisResultFreshness";
 import type { FigureDocument } from "../lib/figureDocument";
 import { resolveStatisticalFigureLink, sourceRowsForFigureRows } from "../lib/statisticalFigureLink";
 import { useApp } from "./useApp";
+import { sameFingerprint } from "../lib/textFingerprint";
 
 /** Set the shared worksheet brush from a frozen result figure without
  * rebinding the focused plot. This action is lazy with that specialized UI. */
@@ -12,7 +13,7 @@ export function setLinkedFigureSourceSelection(
 ): boolean {
   const state = useApp.getState();
   const dataset = state.datasets.find((candidate) => candidate.id === datasetId);
-  if (!dataset || dataset.pending || analysisDataFingerprint(dataset) !== expectedFingerprint) return false;
+  if (!dataset || dataset.pending || !sameFingerprint(expectedFingerprint, analysisDataFingerprint(dataset))) return false;
   const clean = [...new Set(rows)]
     .filter((row) => Number.isInteger(row) && row >= 0 && row < dataset.data.time.length)
     .sort((a, b) => a - b);
