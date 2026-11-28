@@ -18,7 +18,7 @@ import { shownFieldKit } from "../../../lib/presetShownFields";
 import { ARITH_OPTIONS, OP_OPTIONS, emptyForm, type MapOpsForm } from "./mapOpsForm";
 import {
   EDGE_MODE_OPTIONS, FFT_OUTPUT_OPTIONS, FFT_WINDOW_OPTIONS, FILTER_MODE_OPTIONS, FLIP_OPTIONS, IMAGE_FILTER_OPTIONS, LEVEL_ORDER_OPTIONS,
-  ROTATE_OPTIONS, SOBEL_OPTIONS,
+  ROTATE_OPTIONS, SOBEL_OPTIONS, WAVELET_ACTION_OPTIONS, WAVELET_MODE_OPTIONS, WAVELET_OPTIONS, WAVELET_THRESHOLD_OPTIONS,
 } from "./mapOpsOptions";
 
 export type MapOpsSettings = Omit<MapOpsForm, "otherId">;
@@ -67,6 +67,13 @@ const STRICT: { [K in keyof MapOpsSettings]: FieldCheck } = {
   edgeMode: checkOneOf(values(EDGE_MODE_OPTIONS)),
   cval: checkNumberText(),
   gradient: checkOneOf(values(SOBEL_OPTIONS)),
+  wtAction: checkOneOf(values(WAVELET_ACTION_OPTIONS)),
+  wtWavelet: checkOneOf(values(WAVELET_OPTIONS)),
+  wtLevel: checkNumberText(whole),
+  wtMode: checkOneOf(values(WAVELET_MODE_OPTIONS)),
+  wtThreshold: checkOneOf(values(WAVELET_THRESHOLD_OPTIONS)),
+  wtValue: checkNumberText(atLeastZero),
+  wtZero: (v) => (typeof v === "string" && /^[0-9, ]{0,40}$/.test(v) ? null : "must be level numbers like 1,2"),
 };
 
 /** The settings the chosen operation shows (everything else is hidden from the user). */
@@ -88,6 +95,10 @@ function shown(s: Record<string, unknown>): string[] {
         ...(s["imgKind"] === "median" || s["imgKind"] === "uniform" ? ["size"] : []),
         ...(s["imgKind"] === "sobel" ? ["gradient"] : []),
       ];
+    case "wavelet2d":
+      return s["wtAction"] === "smooth"
+        ? ["op", "wtAction", "wtWavelet", "wtLevel", "wtMode", "wtZero"]
+        : ["op", "wtAction", "wtWavelet", "wtLevel", "wtMode", "wtThreshold", "wtValue"];
     default: return ["op"]; // transpose has no options, and an unknown op is refused by its own check
   }
 }
@@ -114,7 +125,7 @@ export function createMapOpsAdapter(panel: MapOpsPanelHandle): PresetAdapter<Map
       const detail = s.op === "rotate" ? `${s.degrees}°` : s.op === "flip" ? s.flipAxis === "h" ? "horizontal" : "vertical"
         : s.op === "level" ? `order ${s.order}` : s.op === "scalar" ? `${s.arith} ${s.scalar}` : s.op === "arith" ? s.arith
           : s.op === "fft" ? `${s.fftOutput}, ${s.fftWindow} window` : s.op === "fftfilter" ? s.fMode
-            : s.op === "imgfilter" ? s.imgKind : s.op === "crop" ? `X ${s.xmin || "…"}:${s.xmax || "…"}, Y ${s.ymin || "…"}:${s.ymax || "…"}` : "";
+            : s.op === "imgfilter" ? s.imgKind : s.op === "wavelet2d" ? `${s.wtAction}, ${s.wtWavelet}` : s.op === "crop" ? `X ${s.xmin || "…"}:${s.xmax || "…"}, Y ${s.ymin || "…"}:${s.ymax || "…"}` : "";
       return detail ? `${name}: ${detail}` : name;
     },
   };

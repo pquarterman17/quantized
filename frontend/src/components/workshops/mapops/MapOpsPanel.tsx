@@ -10,6 +10,7 @@ import { NumberField } from "../../primitives/NumberField";
 import { lazyRegion } from "../../../lib/lazyRegion";
 import { useAnalysisExtras } from "../../../store/analysisExtras";
 import { FftFields, FftFilterFields, ImageFilterFields } from "./FilterFields";
+import { WaveletFields } from "./WaveletFields";
 import { ARITH_OPTIONS, OP_OPTIONS, type MapOpKind } from "./mapOpsForm";
 import { FLIP_OPTIONS, LEVEL_ORDER_OPTIONS, ROTATE_OPTIONS } from "./mapOpsOptions";
 import { useMapOps, type MapOpsState } from "./useMapOps";
@@ -94,6 +95,8 @@ function Fields({ m }: { m: MapOpsState }) {
       return <FftFilterFields f={f} set={set} />;
     case "imgfilter":
       return <ImageFilterFields f={f} set={set} />;
+    case "wavelet2d":
+      return <WaveletFields f={f} set={set} />;
     case "arith":
     case "scalar":
       return (

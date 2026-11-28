@@ -13788,7 +13788,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "crop" | "flip" | "rotate" | "transpose" | "plane_level" | "arith" | "scalar" | "fft2d" | "fft_filter" | "image_filter";
+            op: "crop" | "flip" | "rotate" | "transpose" | "plane_level" | "arith" | "scalar" | "fft2d" | "fft_filter" | "image_filter" | "wavelet2d";
             /**
              * Order
              * @default 1
@@ -13833,6 +13833,35 @@ export interface components {
              * @default none
              */
             window?: string;
+            /**
+             * Wt Action
+             * @default denoise
+             */
+            wt_action?: string;
+            /** Wt Level */
+            wt_level?: number | null;
+            /**
+             * Wt Mode
+             * @default symmetric
+             */
+            wt_mode?: string;
+            /**
+             * Wt Threshold
+             * @default soft
+             */
+            wt_threshold?: string;
+            /** Wt Value */
+            wt_value?: number | null;
+            /**
+             * Wt Wavelet
+             * @default db4
+             */
+            wt_wavelet?: string;
+            /**
+             * Wt Zero
+             * @default 1
+             */
+            wt_zero?: string;
             /** X Col */
             x_col?: number | string | null;
             /** Xmax */

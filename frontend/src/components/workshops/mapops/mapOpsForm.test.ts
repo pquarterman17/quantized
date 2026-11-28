@@ -43,4 +43,14 @@ describe("buildRequest", () => {
     expect(buildRequest({ ...emptyForm(), op: "imgfilter", imgKind: "sobel", gradient: "x" }).req).toEqual({ op: "image_filter", filter_kind: "sobel", edge_mode: "reflect", gradient: "x" });
     expect(opLabel({ ...emptyForm(), op: "fftfilter", fMode: "highpass" })).toBe("FFT highpass");
   });
+
+  it("2-D wavelet requests (and refusals)", () => {
+    expect(buildRequest({ ...emptyForm(), op: "wavelet2d" }).req).toEqual({ op: "wavelet2d", wt_action: "denoise", wt_wavelet: "db4", wt_mode: "symmetric", wt_threshold: "soft" });
+    expect(buildRequest({ ...emptyForm(), op: "wavelet2d", wtLevel: "2", wtValue: "0", wtThreshold: "hard" }).req).toEqual({ op: "wavelet2d", wt_action: "denoise", wt_wavelet: "db4", wt_mode: "symmetric", wt_level: 2, wt_threshold: "hard", wt_value: 0 });
+    expect(buildRequest({ ...emptyForm(), op: "wavelet2d", wtAction: "smooth", wtZero: "1, 2" }).req).toMatchObject({ wt_action: "smooth", wt_zero: "1,2" });
+    expect(buildRequest({ ...emptyForm(), op: "wavelet2d", wtAction: "smooth", wtZero: "" }).error).toMatch(/levels/);
+    expect(buildRequest({ ...emptyForm(), op: "wavelet2d", wtLevel: "1.5" }).error).toMatch(/whole/);
+    expect(buildRequest({ ...emptyForm(), op: "wavelet2d", wtValue: "-1" }).error).toMatch(/threshold/);
+    expect(opLabel({ ...emptyForm(), op: "wavelet2d", wtAction: "smooth", wtWavelet: "haar" })).toBe("wavelet smooth haar");
+  });
 });
