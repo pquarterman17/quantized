@@ -5,6 +5,7 @@
 import type { AnalysisResult } from "./analysisResult";
 import { sourcesFingerprint, VIEW_FINGERPRINT_PREFIX } from "./analysisResultFreshness";
 import type { Dataset } from "./types";
+import { sameFingerprint } from "./textFingerprint";
 
 /** The output ids that are out of date in the file just parsed. */
 export function staleAnalysisOutputs(results: readonly AnalysisResult[], datasets: readonly Dataset[]): string[] {
@@ -14,7 +15,7 @@ export function staleAnalysisOutputs(results: readonly AnalysisResult[], dataset
     // Judge by the kind the stored value was taken with (see VIEW_FINGERPRINT_PREFIX).
     const kind = result.sourceFingerprint?.startsWith(VIEW_FINGERPRINT_PREFIX) ? "view" : "raw";
     const now = result.stale === true || result.sourceFingerprint === undefined ? null : sourcesFingerprint(result, byId, kind);
-    if (result.stale !== true && (now === null || now === result.sourceFingerprint)) continue;
+    if (result.stale !== true && (now === null || sameFingerprint(result.sourceFingerprint, now))) continue;
     for (const ref of result.outputs) if (byId.has(ref.datasetId)) stale.add(ref.datasetId);
   }
   return [...stale];

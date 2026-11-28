@@ -15,6 +15,7 @@ import type { AnalysisResult, AnalysisResultValue } from "./analysisResult";
 import { analysisDataFingerprint } from "./analysisResultFreshness";
 import { COMMIT_KEY_PARAM, REOPEN_PARAM, isCommittedOutputResult } from "./committedOutputGraph";
 import type { Dataset } from "./types";
+import { sameFingerprint } from "./textFingerprint";
 
 /** Producers that reopen in their tool, with the tool's name. The producer id
  *  doubles as the tool id of the editing session. */
@@ -139,7 +140,7 @@ export function replaceBlockedReason(result: AnalysisResult, output: Dataset | u
   if (attached.length) {
     return `“${output.name}” carries worksheet edits (${attached.join(", ")}) made for its old data; replacing it would drop or misapply them, so the commit adds a new output.`;
   }
-  if (recorded !== analysisDataFingerprint(output)) {
+  if (!sameFingerprint(recorded, analysisDataFingerprint(output))) {
     return `“${output.name}” was edited after it was added; replacing it would discard those edits, so the commit adds a new output.`;
   }
   return null;
@@ -216,7 +217,7 @@ function sourceNotice(result: AnalysisResult, toolLabel: string, sources: readon
   const primary = sources[0]!;
   if (primary.pending) {
     notices.push(`“${primary.name}” is still loading, so it cannot be checked against this result yet. Load it, then run ${toolLabel} again before committing.`);
-  } else if (recordedComputedOn(result) !== analysisDataFingerprint(primary)) {
+  } else if (!sameFingerprint(recordedComputedOn(result), analysisDataFingerprint(primary))) {
     notices.push(`“${primary.name}” changed after this result was computed. The recorded settings are restored; check the column choices and run ${toolLabel} again on the current data before committing.`);
   }
   if (sources.length > 1) {
@@ -226,7 +227,7 @@ function sourceNotice(result: AnalysisResult, toolLabel: string, sources: readon
         notices.push(`“${source.name}” is still loading, so it cannot be checked against this result yet. Load it, then run ${toolLabel} again before committing.`);
       } else if (!recorded?.has(source.id)) {
         notices.push(`“${source.name}” cannot be checked against this result (it was added before its sources were recorded), so run ${toolLabel} again on the current data before committing.`);
-      } else if (recorded.get(source.id) !== analysisDataFingerprint(source)) {
+      } else if (!sameFingerprint(recorded.get(source.id), analysisDataFingerprint(source))) {
         notices.push(`“${source.name}” changed after this result was computed; run ${toolLabel} again on the current data before committing.`);
       }
     }
