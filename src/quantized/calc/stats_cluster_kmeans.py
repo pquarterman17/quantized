@@ -10,11 +10,13 @@ here, so a seed reproduces the same answer on every machine.
   ``max_iter``. An empty cluster takes the point farthest from its own centre.
 * ``initial_centers`` (k x p, original units) replaces the random start and the
   restarts: one deterministic run from those centres (``init`` then reads
-  ``"given"``). This is how an Origin run is reproduced exactly.
+  ``"given"``). This is how an Origin run is reproduced exactly, and cluster
+  ``i`` is the one that grew from centre ``i`` as typed (no sorting).
 * Restarts: ``n_init`` independent starts, the lowest within-cluster sum of
   squares wins (the earlier restart on an exact tie).
 * Cluster numbers 1..k are assigned by sorting the centroids (original units)
-  lexicographically, so a label never depends on which restart won.
+  lexicographically, so a label never depends on which restart won. With given
+  centres the numbers follow the order the centres were given instead.
 * Distances, centroids and the sums of squares are taken in the scaled space
   that was clustered (``standardize``); centroids are also reported in
   original units, and ``wcss_original`` is the same partition's within sum of
@@ -160,7 +162,8 @@ def kmeans_cluster(
     _, raw, iters, converged, best_restart = best
 
     cent_orig = np.vstack([arr[raw == c].mean(axis=0) for c in range(k)])
-    order = np.lexsort(cent_orig.T[::-1])  # lexicographic: first column, then the next
+    # lexicographic: first column, then the next; given centres keep the order they were typed in
+    order = np.arange(k) if given is not None else np.lexsort(cent_orig.T[::-1])
     rank = np.empty(k, dtype=np.intp)
     rank[order] = np.arange(k)
     labels = rank[raw]
