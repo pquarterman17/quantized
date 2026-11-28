@@ -105,6 +105,7 @@ export interface GlobalRow {
 
 /** Shared values once each, then every member's own (per-dataset) values. */
 export function resultRows(r: GlobalFitResult, members: readonly GlobalMember[]): GlobalRow[] {
+  const has = (i: number, param: string) => r.datasetParamNames?.[i]?.includes(param) ?? true;
   const isShared = (i: number, j: number) => r.shared.some((g) => g.paramIdx === j && g.datasets.includes(i));
   const rows: GlobalRow[] = r.shared.map((g) => ({
     param: r.paramNames[g.paramIdx] ?? g.name,
@@ -114,17 +115,19 @@ export function resultRows(r: GlobalFitResult, members: readonly GlobalMember[])
   }));
   members.forEach((m, i) => {
     r.paramNames.forEach((param, j) => {
-      if (!isShared(i, j)) rows.push({ param, dataset: m.label, value: r.params[i]?.[j] ?? null, error: r.errors[i]?.[j] ?? null });
+      if (has(i, param) && !isShared(i, j)) rows.push({ param, dataset: m.label, value: r.params[i]?.[j] ?? null, error: r.errors[i]?.[j] ?? null });
     });
   });
   return rows;
 }
 
 /** One report row per member: every parameter (shared ones repeat), its
- *  error, and R². */
+ *  error, and R². Every row has the same keys (the report table's columns come
+ *  from the first row), so a parameter a series' model lacks is null. */
 export function reportRecords(r: GlobalFitResult, members: readonly GlobalMember[]): Record<string, unknown>[] {
   return members.map((m, i) => {
     const rec: Record<string, unknown> = { dataset: m.label };
+    if (r.datasetModels) rec.model = r.datasetModels[i] ?? null;
     r.paramNames.forEach((p, j) => {
       rec[p] = r.params[i]?.[j] ?? null;
       rec[`± ${p}`] = r.errors[i]?.[j] ?? null;

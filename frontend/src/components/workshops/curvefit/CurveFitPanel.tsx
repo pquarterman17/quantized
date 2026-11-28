@@ -269,7 +269,7 @@ export default function CurveFitPanel() {
     return (
       <ToolWindow id="curvefit" title="Curve fit" width={360} x={floatingX(360, "curvefit")} dockable busy={busy} onClose={close} header={<CurveFitHeader modelPicker={modelPicker} range={rangeBar} />}>
         <AnalysisInputReview toolId="curvefit" singleY policy={ROW_POLICY.analysisView} />
-        <GlobalFitSection model={globalModel} />
+        <GlobalFitSection model={globalModel} catalog={models} />
       </ToolWindow>
     );
   }

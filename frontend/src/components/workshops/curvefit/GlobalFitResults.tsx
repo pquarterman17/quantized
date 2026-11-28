@@ -46,6 +46,7 @@ export default function GlobalFitResults({ s }: { s: GlobalFitState }) {
         <thead>
           <tr>
             <th>series</th>
+            {fit.datasetModels && <th>model</th>}
             <th>R²</th>
             <th title="Unweighted root-mean-square residual, in the units of y">RMSE (y units)</th>
             <th />
@@ -55,6 +56,7 @@ export default function GlobalFitResults({ s }: { s: GlobalFitState }) {
           {members.map((m, i) => (
             <tr key={`${m.datasetId}:${m.yKey}`}>
               <td>{m.label}</td>
+              {fit.datasetModels && <td>{fit.datasetModels[i]}</td>}
               <td>{fmt(fit.R2[i])}</td>
               <td>{fmt(fit.RMSE[i])}</td>
               <td>
@@ -77,6 +79,11 @@ export default function GlobalFitResults({ s }: { s: GlobalFitState }) {
       <div className="qzk-ds-meta" style={{ marginTop: 4, color: "var(--text-faint)" }}>
         reduced χ² {fmt(fit.chiSqRed)} · {fit.nFree} free parameters · {fit.nTotal} points
       </div>
+      {fit.AIC !== undefined && (
+        <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }} title="Joint fit over every series (calc.fit_metrics)">
+          joint fit: χ² {fmt(fit.chiSqTotal)} · AIC {fmt(fit.AIC)} · BIC {fmt(fit.BIC)}
+        </div>
+      )}
       {!s.stale && <FitTableControls
         sourceKey={`global:${members.map((m) => `${m.datasetId}:${m.yKey}`).join(",")}`}
         stats={["r2", "chiSqRed", "chiSq", "n"]}

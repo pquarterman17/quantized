@@ -9,6 +9,7 @@ import { NumberField } from "../../primitives/NumberField";
 import DatasetCompareResult from "./DatasetCompareResult";
 import GlobalFitResults from "./GlobalFitResults";
 import { memberKey, type GlobalSource } from "./globalFitData";
+import type { FitModel } from "../../../lib/types";
 import { useGlobalFit, type GlobalModel } from "./useGlobalFit";
 
 const SOURCES = [
@@ -16,8 +17,9 @@ const SOURCES = [
   { value: "datasets", label: "Datasets with these columns" },
 ];
 
-export default function GlobalFitSection({ model }: { model: GlobalModel | null }) {
-  const s = useGlobalFit(model);
+export default function GlobalFitSection({ model, catalog = [] }: { model: GlobalModel | null; catalog?: readonly FitModel[] }) {
+  const s = useGlobalFit(model, catalog);
+  const modelOptions = [{ value: "", label: `Same model (${model?.name ?? ""})` }, ...catalog.map((m) => ({ value: m.name, label: m.name }))];
 
   if (!model) {
     return (
@@ -48,6 +50,15 @@ export default function GlobalFitSection({ model }: { model: GlobalModel | null 
                 onChange={() => s.togglePick(key)}
               />
               {m.label}
+              {catalog.length > 0 && s.picked.includes(key) && (
+                <Select
+                  aria-label={`Model for ${m.label}`}
+                  title="Fit this series with its own model; share parameters below"
+                  options={modelOptions}
+                  value={s.memberModels[key] ?? ""}
+                  onChange={(e) => s.setMemberModel(key, e.target.value)}
+                />
+              )}
             </label>
           );
         })}
@@ -60,7 +71,7 @@ export default function GlobalFitSection({ model }: { model: GlobalModel | null 
 
       <div className="qzk-ds-meta" style={{ display: "flex", gap: 6, marginTop: 8, color: "var(--text-faint)" }}>
         <span style={{ flex: 1 }}>parameter</span>
-        <span style={{ width: 44 }}>shared</span>
+        <span style={{ width: 44 }} title="Tick to fit one value across all series; every series' model must have the parameter">shared</span>
         <span style={{ width: 64 }}>start</span>
         <span style={{ width: 64 }}>min</span>
         <span style={{ width: 64 }}>max</span>
