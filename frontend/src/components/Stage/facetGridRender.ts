@@ -35,6 +35,7 @@ import { LINEAR_PATHS, POINTS_PATHS } from "../../lib/uplotPaths";
 import type { SeriesStyle } from "../../lib/types";
 import { buildOpts, type BuildOptsArgs } from "../../lib/uplotOpts";
 import { alignGutters, resizeAligned, sharedGutters } from "./panelGutters";
+import { boxCursor, panelRangeSelect, withBoxHooks, type PanelBoxHandler } from "./panelBoxSelect";
 
 /** Everything a facet cell's `buildOpts` call needs that is the SAME for
  *  every panel. `width`/`height` (the computed cell size), `title` (the
@@ -68,6 +69,8 @@ export interface FacetGridArgs {
   /** P1.4 residual 3: an ENCODED grid's per-panel series styles and finished
    *  legend text (`Stage/useFacetEncoding`), in place of the channel renames. */
   encoded?: { styles: readonly (readonly SeriesStyle[])[]; labels: readonly (readonly string[])[] };
+  /** The Select rows box drawn inside a panel (`usePanelBoxSelect`). */
+  onBox?: PanelBoxHandler;
 }
 
 /** A style as a facet cell draws it: spline / size-by / drop lines are not drawn in facet grids (the export warns the
@@ -104,9 +107,10 @@ export function renderFacetGrid(host: HTMLDivElement, args: FacetGridArgs): uPlo
       seriesStyles: (args.encoded ? [...args.encoded.styles[i]] : facetPanelStyles(p, args.seriesStyles)).map(facetCellStyle),
       linearPaths: LINEAR_PATHS,
       pointsPaths: POINTS_PATHS,
+      onRangeSelect: panelRangeSelect(args.onBox, "facet", i),
     });
-    opts.cursor = { ...opts.cursor, sync: { key: args.syncKey } };
-    opts.hooks = { setScale: [args.onSetScale] };
+    opts.cursor = boxCursor(opts, args.cell.tool, { key: args.syncKey });
+    opts.hooks = withBoxHooks(opts, [args.onSetScale]);
     sharedGutters(opts, shared); // a column's x ticks line up row to row
     return new uPlot(opts, p.payload.data, div);
   });

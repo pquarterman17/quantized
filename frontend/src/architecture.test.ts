@@ -972,7 +972,9 @@ const TS_MODULE_PINS: Record<string, number> = {
   // moved to `spatialPanelFetch.ts`, which also masks excluded rows.
   // 705 -> 695 (2026-11-13, figures integration): the hook's result types
   // moved to `useMultiPanelStageTypes.ts`, funding the on-demand plot parts.
-  "/components/Stage/useMultiPanelStage.ts": 695,
+  // 695 -> 683 (2026-11-28, item 22): the host's layout style moved to `panelHostStyle.ts`, funding the
+  // panel box-select wiring.
+  "/components/Stage/useMultiPanelStage.ts": 683,
   // useStatStage.ts GRADUATED 2026-09-27 (pin was 546; P2.6 box 4): its
   // public types (params + the returned state) moved to
   // components/Stage/useStatStageTypes.ts, re-exported unchanged, which put
