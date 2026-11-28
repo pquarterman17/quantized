@@ -32,12 +32,16 @@ const pick = (name: string, label: string) => {
 };
 
 /** What the server does with a Pareto request: sum the value column per level of the category column. */
-function paretoSums(body: Record<string, any>): Record<string, number> {
+interface ParetoBody {
+  dataset: { values: number[][]; cat_levels: Record<number, string[]> };
+  plots2: { cat_col: number; value_col: number };
+}
+function paretoSums(body: ParetoBody): Record<string, number> {
   const ds = body.dataset;
   const cat = body.plots2.cat_col - 1; // wire columns count [x, *channels]
   const val = body.plots2.value_col - 1;
   const out: Record<string, number> = {};
-  ds.values.forEach((row: number[]) => {
+  ds.values.forEach((row) => {
     const label = ds.cat_levels[cat][row[cat]];
     out[label] = (out[label] ?? 0) + row[val];
   });
@@ -52,7 +56,7 @@ describe("Pareto and Parallel on a CSV with text columns", () => {
     pick("Category column", "grp");
     pick("Value column", "val");
     await waitFor(() => {
-      const bodies = vi.mocked(postBlob).mock.calls.map((c) => c[1] as Record<string, any>);
+      const bodies = vi.mocked(postBlob).mock.calls.map((c) => c[1] as ParetoBody);
       expect(paretoSums(bodies.at(-1)!)).toEqual({ A: 39, B: 156 });
     });
     expect(VAL.slice(0, 6).reduce((a, b) => a + b, 0)).toBe(39);
@@ -65,7 +69,7 @@ describe("Pareto and Parallel on a CSV with text columns", () => {
     fireEvent.click(screen.getByRole("button", { name: "Export" }));
     await waitFor(() => expect(vi.mocked(postDownload).mock.calls).toHaveLength(1));
     // pandas: df.groupby("sub")["val"].sum() -> x 69, y 126
-    expect(paretoSums(vi.mocked(postDownload).mock.calls[0][1] as Record<string, any>)).toEqual({ x: 69, y: 126 });
+    expect(paretoSums(vi.mocked(postDownload).mock.calls[0][1] as ParetoBody)).toEqual({ x: 69, y: 126 });
   });
 
   it("offers the text columns to Parallel's Color by, but not as axes", () => {
