@@ -193,9 +193,9 @@ describe("marginal encodings: the canvas draws the fixture", () => {
     draw(canvas(ctx), host, hook.result.current.draw);
     const g = FIX.marginal.groupBox.geometry;
     const pts = out.slice(0, g.points.length);
-    expect(pts.map((a) => a.fill)).toEqual(g.point_group.map((k: number) => seriesColor(k)));
+    expect(pts.map((a) => a.fill)).toEqual((g.point_group as number[]).map((k) => seriesColor(k)));
     const key = out.slice(g.points.length).filter((a) => a.r === 3);
-    expect(key.map((a) => a.fill)).toEqual(g.key.groups.ids.map((k: number) => seriesColor(k)));
+    expect(key.map((a) => a.fill)).toEqual((g.key.groups.ids as number[]).map((k) => seriesColor(k)));
   });
 });
 
