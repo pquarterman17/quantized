@@ -42,7 +42,7 @@ describe("Trash restore brings back the sheet's named ranges", () => {
     st().touchDataset("d1");
     const f = st().datasets.find((d) => d.id === "d1")!.formulas!.at(-1)!;
     expect(f.ranges).toEqual([{ name: "Base", id }]);
-    st().recalcNow();
+    await st().recalcNow();
     expect(st().datasets.find((d) => d.id === "d1")!.formulaErrors).toBeUndefined();
   });
 
