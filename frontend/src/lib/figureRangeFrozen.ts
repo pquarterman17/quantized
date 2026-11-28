@@ -12,7 +12,8 @@ import type { Dataset } from "./types";
 /** "rows frozen from range Base", or null when `doc` is not a frozen figure made from a named range. The wording the
  *  Library shows beside the figure. */
 export function frozenRangeNote(doc: FigureDocument): string | null {
-  const range = doc.data.mode === "frozen" ? doc.plot.view.rowRange : undefined;
+  // `?.`: a Library fixture or a hand-built node may carry a partial document; none is "frozen from a range".
+  const range = (doc.data as FigureDocument["data"] | undefined)?.mode === "frozen" ? doc.plot.view.rowRange : undefined;
   return range?.named ? `rows frozen from range ${range.namedAs ?? "(unnamed)"}` : null;
 }
 
