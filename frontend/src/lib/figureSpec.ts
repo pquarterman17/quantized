@@ -314,10 +314,6 @@ function buildFigureSpecForView(
   const wireFacets = facets && facetYKeys && (encoding || groupCol !== null)
     ? withFacetRows(facets, data, st.facetKey as number, facetYKeys, extras.liveDataset, st.seriesLabels)
     : facets;
-  // Item 24: a plain facet grid's panels carry their rows' per-point texts (a split grid is refused, as on screen).
-  const textFacets = wireFacets && textSrc && extras.liveDataset && st.facetKey != null && !(facetYKeys && (encoding || groupCol !== null))
-    ? marks()?.withFacetTexts(wireFacets, { data, facetCol: st.facetKey, xKey: st.xKey, yKeys: st.yKeys, src: textSrc, live: extras.liveDataset, offset: st.rowRange?.from ?? 0, styles: st.seriesStyles }) ?? wireFacets
-    : wireFacets;
   // F4.2c (a): an encoded request is split server-side, so it keeps EVERY row
   // (the window takes the split's levels over all of them) and names the ones
   // the window does not draw as data in `excluded_rows` -- the backend blanks
@@ -347,7 +343,6 @@ function buildFigureSpecForView(
     plotted, st.seriesStyles, positions, seriesCycle, legends,
     extras.publicationSeriesStyles, groupCol !== null || (encoding !== null && encodingSplits(encoding)),
     { displayChannels, hiddenChannels: st.hiddenChannels }, groupCol === null && encoding === null && !facets ? { ds: extras.liveDataset, rows: wireDataset.time.length } : null, // G24 row states
-    facets ? null : { src: textSrc, range: st.rowRange, live: extras.liveDataset, rows: wireDataset.time.length, all: encoding !== null }, // item 24 texts
   );
   const spec: FigureSpec = {
     dataset: wireDataset,
@@ -367,7 +362,7 @@ function buildFigureSpecForView(
     ...(groupCol === null ? {} : { group_col: groupCol }),
     ...(encoding === null ? {} : { encoding: figureEncodingWire(encoding) }),
     ...(encoding === null || facets || excludedRows.length === 0 ? {} : { excluded_rows: excludedRows }),
-    ...(textFacets === undefined ? {} : { facets: textFacets as typeof wireFacets }),
+    ...(wireFacets === undefined ? {} : { facets: wireFacets }),
     fmt: o.fmt,
     style: o.style,
     dpi: o.dpi,
@@ -418,8 +413,10 @@ function buildFigureSpecForView(
   const facet = st.facetKey != null ? { col: st.facetKey, yKeys: st.yKeys } : undefined;
   // A document whose publication styles are explicitly `null` asked for
   // matplotlib's own styling, so it keeps the preset's line width too.
+  // Item 24: per-point texts, read from the sheet's rows (lazy: the marks chunk the canvas loaded to draw them).
+  const texted = marks()?.withSpecTexts(spec, st, data, textSrc, extras.liveDataset, encoding !== null, !!facetYKeys && (encoding !== null || groupCol !== null)) ?? spec;
   const traced = withCanvasLineWidth(
-    withDefaultTrace(spec, o.defaultTrace, st.seriesStyles),
+    withDefaultTrace(texted, o.defaultTrace, st.seriesStyles),
     extras.publicationSeriesStyles === null ? undefined : canvasLineWidth(st.plotTemplate, o.defaultLineWidth),
   );
   return o.greyExcluded && extras.liveDataset ? o.greyExcluded(traced, data, dropped, facet) : traced;

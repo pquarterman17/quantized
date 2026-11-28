@@ -9,7 +9,7 @@ import type { ExportSeriesStyle } from "./publicationStyles";
 import type { SeriesStyle } from "./types";
 import { resolveSeriesStyle, seriesColor, withSubgroup } from "./seriesStyleCycle";
 import { lineStyleSpec } from "./lineStyleSanitize";
-import { portableTextFrom, validAlpha, validEvery, validText, validTextSize } from "./symbolSanitize";
+import { validAlpha, validEvery, validText, validTextSize } from "./symbolSanitize";
 
 export type { ExportSeriesStyle } from "./publicationStyles";
 
@@ -131,8 +131,7 @@ export function buildExportStyles(
     if (validAlpha(st?.markerAlpha)) spec.marker_alpha = st.markerAlpha;
     if (validEvery(st?.markerEvery)) spec.marker_every = st.markerEvery;
     if (validText(st?.markerText)) Object.assign(spec, { marker_text: st.markerText, ...(validTextSize(st.markerTextSize) ? { marker_text_size: st.markerTextSize } : {}) }); // item 24
-    const from = portableTextFrom(st?.markerTextFrom);
-    if (from && !st?.bars) spec.marker_text_from = from; // item 24: the template keeps the source
+    if (st?.markerTextFrom != null && typeof st.markerTextFrom !== "number") spec.marker_text_from = st.markerTextFrom; // item 24: a template keeps the source (a column INDEX is one sheet's layout)
     // Plan item 17 line polish, only where the canvas draws it (`lineStyleApplies`).
     const polish = lineStyleSpec(st);
     if (polish?.gap) spec.symbol_gap = polish.gap;

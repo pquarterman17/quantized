@@ -3,32 +3,39 @@
 // history (`recordView`) and the Data Filter (`setDatasetFilter`).
 
 import { fixedLim } from "../lib/axisLim";
-import { scrolledWindow, type Extent, type ScrollKind } from "../lib/axisScroll";
+import { scrolledWindow, type Extent } from "../lib/axisScroll";
+import { axisNumberOf, scrollKind, scrollLim, type ScrollAxisName } from "../lib/axisScrollAxes";
 import type { FilterPlan } from "../lib/graphFilter";
 import { toast } from "./toasts";
 import { useApp } from "./useApp";
 
-export type ScrollAxisName = "x" | "y" | "y2";
+export type { ScrollAxisName };
 type S = ReturnType<typeof useApp.getState>;
-/** The view limits one scroll run can change; `y2Lim` only when the plot has a Y2 axis. */
-type Lims = { xLim: S["xLim"]; yLim: S["yLim"]; y2Lim?: S["y2Lim"] };
+/** The view limits one scroll run can change; `y2Lim` only when the plot has a Y2 axis, `yN` (by axis number) only
+ *  when it has Y3+ axes. */
+type Lims = { xLim: S["xLim"]; yLim: S["yLim"]; y2Lim?: S["y2Lim"]; yN?: Record<number, [number, number] | null> };
 let dragFrom: Lims | null = null;
 
-/** How `axis` of the live view is laid out (an unset Y2 scale is linear). */
-export const scrollKindOf = (s: Pick<S, "xScale" | "yScale" | "y2Scale">, axis: ScrollAxisName): ScrollKind => {
-  const scale = axis === "x" ? s.xScale : axis === "y" ? s.yScale : s.y2Scale;
-  return scale === "log" || scale === "reciprocal" ? scale : "linear";
-};
-const limsOf = (s: S): Lims => ({ xLim: s.xLim, yLim: s.yLim, ...(s.y2Keys?.length ? { y2Lim: s.y2Lim } : {}) });
+const limsOf = (s: S): Lims => ({
+  xLim: s.xLim, yLim: s.yLim,
+  ...(s.y2Keys?.length ? { y2Lim: s.y2Lim } : {}),
+  ...(s.yAxes.length ? { yN: Object.fromEntries(s.yAxes.map((a, i) => [i + 3, a.lim])) } : {}),
+});
 
 /** Move the zoomed window of `axis` to slider position `t` within `extent`, live (no history yet). */
 export function scrollAxisTo(axis: ScrollAxisName, extent: Extent, t: number): void {
   const s = useApp.getState();
-  const lim = fixedLim(axis === "x" ? s.xLim : axis === "y" ? s.yLim : s.y2Lim);
+  const lim = fixedLim(scrollLim(s, axis));
   if (!lim) return;
   dragFrom ??= limsOf(s);
-  const win = scrolledWindow(lim, extent, t, scrollKindOf(s, axis)); // a log or reciprocal axis scrolls in its own space
-  useApp.setState(axis === "x" ? { xLim: win } : axis === "y" ? { yLim: win } : { y2Lim: win });
+  const win = scrolledWindow(lim, extent, t, scrollKind(s, axis)); // each axis scrolls in its own space
+  const n = axisNumberOf(axis);
+  useApp.setState(
+    axis === "x" ? { xLim: win }
+      : axis === "y" ? { yLim: win }
+        : axis === "y2" ? { y2Lim: win }
+          : { yAxes: s.yAxes.map((a, i) => (i + 3 === n ? { ...a, lim: win } : a)) },
+  );
 }
 
 /** The drag or key run is over: it becomes ONE view-history step (Back view undoes it all). */

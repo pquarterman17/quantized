@@ -13,6 +13,7 @@
 
 import type { FigureFacetSpec } from "./api/figures";
 import { facetPayloads, type FacetPanel } from "./facet";
+import type { PlotView } from "./plotview";
 import { markerTextRows, textSourceOf, type TextRowsStyle } from "./markerTextRows";
 import { activeRowIndices, droppedRows, pruneToLiveDataset } from "./rowstate";
 import type { DataStruct, Dataset, SeriesStyle } from "./types";
@@ -76,28 +77,23 @@ export function facetTextStyles(
   return any ? out : null;
 }
 
-/** What a facet request needs to read its panels' texts (see `withFacetTexts`). */
-export interface FacetTextRequest {
-  /** The request's data after the row window, before the exclusion prune. */
-  data: DataStruct;
-  facetCol: number;
-  xKey: number | null;
-  yKeys: number[] | null;
-  /** The sheet the texts number, the window's dataset (its exclusions prune `data`), and the window's first row. */
-  src: Dataset;
-  live: Dataset;
-  offset: number;
-  styles: Record<number, SeriesStyle>;
-}
-
 /** `facets` (`buildFacetSpecs`' panels, one per level) with each series' wire style carrying its `marker_texts`,
  *  aligned to the panel's rows: the panels' rows are re-derived through the same `facetPayloads` the grid and
  *  `buildFacetSpecs` use, and read as sheet rows through the request's exclusion prune. The same reference when no
  *  series asks, or when the panels do not line up (fail closed: the backend then says the list does not fit). */
-export function withFacetTexts(facets: readonly FigureFacetSpec[], req: FacetTextRequest): readonly FigureFacetSpec[] {
-  const { live, src, offset, styles } = req;
+export function withFacetTexts(
+  facets: FigureFacetSpec[],
+  view: Pick<PlotView, "facetKey" | "xKey" | "yKeys" | "seriesStyles" | "rowRange">,
+  data: DataStruct,
+  src: Dataset | null | undefined,
+  live: Dataset | null | undefined,
+  split: boolean,
+): FigureFacetSpec[] {
+  const { seriesStyles: styles, facetKey } = view;
+  const offset = view.rowRange?.from ?? 0;
+  if (!src || !live || facetKey == null || split) return facets;
   if (offset + live.data.time.length > src.data.time.length) return facets; // not this sheet's rows (a per-series-X view repeats them)
-  const panels = facetPayloads(pruneToLiveDataset(req.data, live), req.facetCol, req.xKey, req.yKeys);
+  const panels = facetPayloads(pruneToLiveDataset(data, live), facetKey, view.xKey, view.yKeys);
   if (panels.length !== facets.length || panels.some((p, i) => p.label !== facets[i].label)) return facets;
   const kept = activeRowIndices(live.data.time.length, droppedRows(live));
   let any = false;

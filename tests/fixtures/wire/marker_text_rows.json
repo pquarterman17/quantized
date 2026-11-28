@@ -182,6 +182,7 @@
         "series_styles": [
           {
             "color": "#3366cc",
+            "marker_text_from": "letters",
             "marker_texts": [
               "A",
               "B",
@@ -407,6 +408,7 @@
         "series_styles": [
           {
             "color": "#aa3377",
+            "marker_text_from": "rows",
             "marker_texts": [
               "1",
               "3",
@@ -624,6 +626,9 @@
         "series_styles": [
           {
             "color": "#884400",
+            "marker_text_from": {
+              "name": "Tag"
+            },
             "marker_texts": [
               "Fe",
               null,

@@ -19,11 +19,6 @@ export const validText = (v: unknown): v is string => typeof v === "string" && v
 /** A text symbol's font size, pt. */
 export const validTextSize = (v: unknown): v is number => typeof v === "number" && v >= 4 && v <= 72;
 
-/** The per-point text source a graph template can carry (plan item 24): letters, row numbers, or a text column by
- *  NAME. A worksheet column INDEX is bound to one sheet's layout, so it is not portable and is not kept (as size-by). */
-export const portableTextFrom = (v: unknown): "letters" | "rows" | { name: string } | undefined =>
-  v === "letters" || v === "rows" ? v : typeof v === "object" && v !== null && typeof (v as { name?: unknown }).name === "string" && (v as { name: string }).name !== "" ? { name: (v as { name: string }).name } : undefined;
-
 /** `style` without an invalid `markerEvery` / `markerAlpha` / `markerText`. */
 export function cleanSymbols<S extends SeriesStyle | null | undefined>(style: S): S {
   if (!style) return style;

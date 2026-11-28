@@ -83,6 +83,7 @@
                 ],
                 "style": {
                   "color": "#3366cc",
+                  "marker_text_from": "letters",
                   "marker_texts": [
                     "A",
                     "E",
@@ -112,6 +113,7 @@
                 ],
                 "style": {
                   "color": "#3366cc",
+                  "marker_text_from": "letters",
                   "marker_texts": [
                     "B",
                     "C",
@@ -131,6 +133,7 @@
         "series_styles": [
           {
             "color": "#3366cc",
+            "marker_text_from": "letters",
             "width": 1.5
           }
         ],
@@ -255,6 +258,7 @@
                 ],
                 "style": {
                   "color": "#aa3377",
+                  "marker_text_from": "rows",
                   "marker_texts": [
                     "4",
                     "5",
@@ -278,6 +282,7 @@
                 ],
                 "style": {
                   "color": "#aa3377",
+                  "marker_text_from": "rows",
                   "marker_texts": [
                     "3"
                   ],
@@ -294,6 +299,7 @@
         "series_styles": [
           {
             "color": "#aa3377",
+            "marker_text_from": "rows",
             "width": 1.5
           }
         ],
