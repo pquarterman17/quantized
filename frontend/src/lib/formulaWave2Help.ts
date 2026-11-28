@@ -22,7 +22,7 @@ export const WAVE2_ENTRIES: Wave2HelpEntry[] = [
   e("offset(A, k) — A at this row plus k (negative looks back)", "offset(|, -1)"),
   e("choose(k, a, b, …) — the k-th value (1-based)", "choose(|, 10, 20, 30)"),
   e("erfinv(y) / erfcinv(r) — inverse error functions", "erfinv(|)"),
-  e("beta(a, b) / lbeta(a, b) — positive arguments only", "beta(|, 2)"),
+  e("beta(a, b) / lbeta(a, b) — as scipy, negative non-integer arguments too", "beta(|, 2)"),
   e("digamma(x) — psi(x), Gamma'/Gamma", "digamma(|)"),
   e("besselj(n, x) / bessely(n, x) — integer order n; Y needs x > 0", "besselj(0, |)"),
   e("sinc(x) — sin(pi x) / (pi x)", "sinc(|)"),

@@ -20,7 +20,7 @@ import {
   blockFromSelection,
   describeNamedRange,
   nameClash,
-  namedRangeNameRefusal,
+  namedRangeNewNameRefusal,
   newNamedRangeId,
   targetRefusal,
   type NamedRange,
@@ -89,7 +89,7 @@ export interface DefineSpec {
 export function defineNamedRange(spec: DefineSpec): NamedRangeResult {
   const s = useApp.getState();
   const name = spec.name.trim();
-  const nameProblem = namedRangeNameRefusal(name);
+  const nameProblem = namedRangeNewNameRefusal(name);
   if (nameProblem) return refuse(nameProblem);
   const ds = s.datasets.find((d) => d.id === spec.datasetId);
   if (!ds) return refuse("the worksheet no longer exists");
@@ -129,9 +129,9 @@ export function renameNamedRange(id: string, name: string): NamedRangeResult {
   const range = s.namedRanges.find((r) => r.id === id);
   if (!range) return refuse("that named range no longer exists");
   const next = name.trim();
-  const problem = namedRangeNameRefusal(next);
-  if (problem) return refuse(problem);
   if (next === range.name) return { ok: true, id };
+  const problem = namedRangeNewNameRefusal(next);
+  if (problem) return refuse(problem);
   const clash = nameClash(s.namedRanges, next, range.scope, s.datasets, id);
   if (clash) return refuse(`"${clash.name}" is already a named range in this workbook`);
   s.recordHistory("rename named range");

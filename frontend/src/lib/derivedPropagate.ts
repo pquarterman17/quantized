@@ -193,8 +193,9 @@ export function derivative(n: Node, v: string, modelExpr: (model: string) => str
     case "lag":
     case "diff":
     case "agg":
+    case "rngagg":
     case "cumsum":
-      return refuse(`${n.k === "agg" ? n.fn : n.k}() (it couples rows)`);
+      return refuse(`${n.k === "agg" || n.k === "rngagg" ? n.fn : n.k}() (it couples rows)`);
     case "index":
       return refuse(`${n.col}[…] (it reads another row)`);
     default:

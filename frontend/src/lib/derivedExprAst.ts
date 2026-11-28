@@ -39,6 +39,8 @@ export type Node =
   | { k: "lag"; col: string; n: Node }
   | { k: "diff"; col: string }
   | { k: "agg"; fn: string; col: string; range?: [Node, Node] }
+  // `mean(rng("Name"[, n]))` (lib/formulaRanges.ts): an aggregate over a named range's rows; `n` is its 1-based column.
+  | { k: "rngagg"; fn: string; name: string; n: number | null }
   | { k: "fit"; model: string; param: string }
   | { k: "fitval"; model: string; arg: Node }
   // Worksheet audit #17 (lib/formulaRefs.ts): `c ? a : b` parses to "if".
@@ -275,6 +277,20 @@ export function parseExpr(src: string): Node {
       return { k: "diff", col };
     }
     const first = peek();
+    if (AGGREGATE_NAMES.has(fn) && isKw(first, "rng") && isOp(peek(1), "(") && peek(2)?.t === "str") {
+      pos += 2;
+      const name = text();
+      let n: number | null = null;
+      if (isOp(peek(), ",")) {
+        pos++;
+        const t = toks[pos++];
+        if (t?.t !== "num") throw new Error("expected a column number");
+        n = t.v;
+      }
+      expect(")");
+      expect(")");
+      return { k: "rngagg", fn, name, n };
+    }
     if (
       AGGREGATE_NAMES.has(fn) &&
       first?.t === "name" &&
@@ -399,6 +415,8 @@ export function printExpr(n: Node): string {
       return `diff(${n.col})`;
     case "agg":
       return n.range ? `${n.fn}(${n.col}[${printExpr(n.range[0])}:${printExpr(n.range[1])}])` : `${n.fn}(${n.col})`;
+    case "rngagg":
+      return `${n.fn}(rng(${quote(n.name)}${n.n === null ? "" : `, ${n.n}`}))`;
     case "cumsum":
       return `cumsum(${n.col})`;
     case "index":
@@ -460,7 +478,7 @@ export function columnsRead(n: Node, out: Set<string> = new Set()): Set<string> 
 
 /** True when the tree reads no column, row, or fitted value — a constant. */
 export function isConstant(n: Node): boolean {
-  if (n.k === "var" || n.k === "row" || n.k === "lag" || n.k === "diff" || n.k === "agg" || n.k === "fit" || n.k === "fitval") return false;
+  if (n.k === "var" || n.k === "row" || n.k === "lag" || n.k === "diff" || n.k === "agg" || n.k === "rngagg" || n.k === "fit" || n.k === "fitval") return false;
   if (n.k === "cumsum" || n.k === "index" || n.k === "sheet" || n.k === "textcmp" || n.k === "textcol") return false;
   if (n.k === "call" && (n.fn === "rnd" || n.fn === "normal")) return false; // a draw per row, not a number
   return children(n).every(isConstant);
