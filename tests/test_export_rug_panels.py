@@ -1,9 +1,9 @@
 """Plan item 20 -- rug marks on a facet grid, an x-break and the magnifier inset, the BACKEND half.
 
-``frontend/src/lib/rugPanelsFixture.test.ts`` records, per case, the export request the Stage builds and,
-per panel, the X of every rug tick the canvas draws. Each request is posted to the real route; every saved
-panel must hold rug segments at the same X (a numpy selection of the finite points), with no warning that
-the rug was dropped.
+``frontend/src/lib/rugPanelsFixture.test.ts`` records, per case, the export request the
+Stage builds and, per panel, the X of every rug tick the canvas draws. Each request is
+posted to the real route; every saved panel must hold rug segments at the same X (a numpy
+selection of the finite points), with no warning that the rug was dropped.
 """
 
 from __future__ import annotations
