@@ -10,6 +10,7 @@ import PlotContextMenu from "./PlotContextMenu";
 import type { PlotPayload } from "../../lib/plotdata";
 import { defaultPlotView, type PlotWindow } from "../../lib/plotview";
 import type { Dataset } from "../../lib/types";
+import { useParamDialog } from "../../store/paramDialog";
 import { useApp } from "../../store/useApp";
 import type { PlotStageActions } from "./usePlotStageActions";
 
@@ -53,6 +54,14 @@ beforeEach(() => {
   });
 });
 
+/** Answer the subset dialog with its defaults (every series ticked, beside the source), as a click on Create does. */
+async function confirmSubsetDialog(): Promise<void> {
+  await waitFor(() => expect(useParamDialog.getState().resolve).not.toBeNull());
+  const { fields, resolve, close } = useParamDialog.getState();
+  resolve?.(Object.fromEntries(fields.map((f) => [f.key, f.default])));
+  close();
+}
+
 const d0 = () => useApp.getState().datasets.find((d) => d.id === "d")!;
 
 describe("data slicer entries", () => {
@@ -75,6 +84,7 @@ describe("data slicer entries", () => {
   it("Create subset from region copies the selected rows beside the source, keeps the graph focused, and links the rows back", async () => {
     open(BOX);
     fireEvent.click(screen.getByText("Create subset from region (2 points)"));
+    await confirmSubsetDialog();
     await waitFor(() => expect(useApp.getState().datasets).toHaveLength(2));
     const sub = useApp.getState().datasets.find((d) => d.id !== "d")!;
     expect(sub.data.time).toEqual([1, 3]);
@@ -91,6 +101,7 @@ describe("data slicer entries", () => {
     useApp.setState({ datasets: [{ ...ds, excludedRows: [3] }] });
     open(BOX);
     fireEvent.click(screen.getByText("Create subset from region (2 points)"));
+    await confirmSubsetDialog();
     await waitFor(() => expect(useApp.getState().datasets).toHaveLength(2));
     expect(useApp.getState().datasets.find((d) => d.id !== "d")!.data.time).toEqual([1]);
   });
