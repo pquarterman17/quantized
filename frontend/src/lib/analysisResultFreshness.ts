@@ -16,6 +16,7 @@
 import type { AnalysisResult } from "./analysisResult";
 import { isCommittedOutputResult } from "./committedOutputGraph";
 import { dataFingerprint } from "./dataFingerprint";
+import { sameFingerprint, textFingerprint } from "./textFingerprint";
 import { DOE_DESIGN_RESULT, PROFILER_RESULT, TOOL_RESULT_NOUN, TOOL_RESULT_PRODUCERS, doeDesignFingerprint, doeDesignRecipe, profilerFitState } from "./toolResultKinds";
 import { rangeChangeNotes } from "./namedRangeResultFreshness";
 import { peakTableMatchesData } from "./peakTableFreshness";
@@ -44,7 +45,7 @@ export function analysisDataFingerprint(dataset: Dataset): string {
   for (let index = 0; index < semantics.length; index++) {
     schema = Math.imul(schema ^ semantics.charCodeAt(index), 0x01000193);
   }
-  return `${dataFingerprint(view)}:${(schema >>> 0).toString(16).padStart(8, "0")}`;
+  return `${dataFingerprint(view)}:${(schema >>> 0).toString(16).padStart(8, "0")}${textFingerprint(view.metadata)}`;
 }
 /** True when a linked output's recipe reads the source's ANALYSIS VIEW
  *  (`inputRows: "analysis-view"`, Signal Processing's "Use excluded/filtered
@@ -143,7 +144,7 @@ function datasetSnapshotState(result: AnalysisResult, datasets: readonly Dataset
   if (sources.some((dataset) => dataset!.pending)) return "pending";
   if (result.stale || !result.sourceFingerprint) return "out-of-date";
   const now = sources.map((dataset) => snapshotFingerprint(result, dataset!)).join(":");
-  if (now !== result.sourceFingerprint) return "out-of-date";
+  if (!sameFingerprint(result.sourceFingerprint, now)) return "out-of-date";
   // A named range it read moved (a retarget changes no data, so the fingerprint cannot see it).
   if (withRanges && rangeChangeNotes(result, datasets).length) return "out-of-date";
   if (result.producer.id === "williamson-hall" && !williamsonHallPeakBindingMatches(result, sources[0]!)) {
@@ -237,7 +238,7 @@ export function stampAnalysisResults(
           ? result : { ...result, stale: true as const };
       }
       const fingerprint = snapshotSourcesFingerprint(result, byId);
-      return fingerprint && fingerprint !== result.sourceFingerprint ? { ...result, stale: true as const } : result;
+      return fingerprint && !sameFingerprint(result.sourceFingerprint, fingerprint) ? { ...result, stale: true as const } : result;
     }
     // A peak result has no linked output and its Dataset.peakTable carries the
     // fit-time fingerprint. Do not stamp a second, generic fingerprint that

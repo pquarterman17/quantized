@@ -4,6 +4,7 @@ import type { FigureDocument } from "./figureDocument";
 import { analysisRowIds } from "./rowstate";
 import type { StatisticalFigureLinkDescriptor } from "./statisticalFigureLinkTypes";
 import type { Dataset } from "./types";
+import { sameFingerprint } from "./textFingerprint";
 
 export interface StatisticalFigureLink {
   sourceId: string;
@@ -104,7 +105,7 @@ export function resolveStatisticalFigureLink(
   const { sourceDatasetId, sourceFingerprint, analysisSourceLink } = snapshot.metadata;
   if (typeof sourceDatasetId !== "string" || typeof sourceFingerprint !== "string") return null;
   const source = datasets.find((dataset) => dataset.id === sourceDatasetId);
-  if (!source || source.pending || analysisDataFingerprint(source) !== sourceFingerprint) return null;
+  if (!source || source.pending || !sameFingerprint(sourceFingerprint, analysisDataFingerprint(source))) return null;
   const descriptor = descriptorFrom(analysisSourceLink, source, snapshot.time.length);
   if (!descriptor) return null;
   return {
