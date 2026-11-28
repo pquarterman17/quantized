@@ -100,6 +100,15 @@ describe("a worksheet source", () => {
     ]);
   });
 
+  it("skips excluded rows and names later rows by their source row number", () => {
+    const excluded: Dataset = { ...SHEET, excludedRows: [0] };
+    expect(pairsFromSheet(excluded, 0, 1, 2)).toEqual([
+      { a: "A", b: "C", p: 0.03, where: "row 2" }, { a: "B", b: "C", p: 0.2, where: "row 3" },
+    ]);
+    const bad: Dataset = { ...SHEET, excludedRows: [0], data: { ...SHEET.data, values: [[0, 0, 0.1], [0, 1, 0.2], [1, 1, 1.5]] } };
+    expect(pairsFromSheet(bad, 0, 1, 2)).toEqual({ error: "Row 3: the p-value must be a number from 0 to 1" });
+  });
+
   it("refuses unusable columns and values, by source row", () => {
     expect(pairsFromSheet(SHEET, 0, 0, 2)).toEqual({ error: expect.stringContaining("three different columns") });
     expect(pairsFromSheet(SHEET, 2, 1, 0)).toEqual({ error: expect.stringContaining("must be a text column") });

@@ -6,6 +6,7 @@
 import type { AnalysisResult } from "./analysisResult";
 import { resolveCategoryLabels } from "./barlayout";
 import { categoryLevels, isCategoricalChannel } from "./categorical";
+import { analysisData, analysisRowIds } from "./rowstate";
 import { sigLabel, sigNote, type SigMarks } from "./sigMarks";
 import type { PairP, StatComparisonsResult } from "./statComparisons";
 import type { GroupSpec } from "./statschooser";
@@ -51,11 +52,14 @@ export function pairsFromResult(r: AnalysisResult): Out<{ pairs: NamedPair[]; me
   return { pairs, method: typeof m === "string" ? m : "post hoc" };
 }
 
-/** The pairs of a worksheet: group A, group B (text columns) and p. Rows are
- *  SOURCE rows (1-based, as the sheet numbers them). */
+/** The pairs of a worksheet: group A, group B (text columns) and p, read
+ *  through the row-state model, so excluded and filtered-out rows are not
+ *  read. Row numbers in messages are SOURCE rows (1-based, as the sheet
+ *  numbers them). */
 export function pairsFromSheet(ds: Dataset, a: number, b: number, pc: number): Out<NamedPair[]> {
   if (ds.pending) return { error: `"${ds.name}" is not fully loaded yet; open the sheet, then pick it again` };
-  const d = ds.data;
+  const d = analysisData(ds) ?? ds.data;
+  const ids = analysisRowIds(ds);
   if (new Set([a, b, pc]).size < 3 || [a, b, pc].some((c) => c < 0 || c >= d.labels.length)) {
     return { error: "Pick three different columns: group A, group B and p-value" };
   }
@@ -71,11 +75,12 @@ export function pairsFromSheet(ds: Dataset, a: number, b: number, pc: number): O
   const [na, nb] = [name(a), name(b)];
   const pairs: NamedPair[] = [];
   for (const [i, row] of d.values.entries()) {
+    const src = (ids ? ids[i] : i) + 1;
     const [x, y, p] = [na(row[a]), nb(row[b]), row[pc]];
     if (x === undefined && y === undefined && !Number.isFinite(p)) continue; // an empty row
-    if (x === undefined || y === undefined) return { error: `Row ${i + 1}: group A or B is empty` };
-    if (!Number.isFinite(p) || p < 0 || p > 1) return { error: `Row ${i + 1}: the p-value must be a number from 0 to 1` };
-    pairs.push({ a: x, b: y, p, where: `row ${i + 1}` });
+    if (x === undefined || y === undefined) return { error: `Row ${src}: group A or B is empty` };
+    if (!Number.isFinite(p) || p < 0 || p > 1) return { error: `Row ${src}: the p-value must be a number from 0 to 1` };
+    pairs.push({ a: x, b: y, p, where: `row ${src}` });
   }
   return pairs.length ? pairs : { error: `"${ds.name}" has no rows to read` };
 }
