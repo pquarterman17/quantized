@@ -49,3 +49,22 @@ def test_texts_are_drawn_where_the_canvas_draws_them(
     assert [g[0] for g in got] == pytest.approx([w[0] for w in want])
     markers = [(ln.get_label(), ln.get_marker()) for ln in ax.lines]
     assert all(m == "" for _, m in markers), markers
+
+
+@pytest.mark.parametrize("case", [c for c in CASES if "dotsUnderText" in c], ids=lambda c: c["name"])
+def test_a_colour_by_series_draws_its_text_and_no_dots_beneath_it(
+    monkeypatch: pytest.MonkeyPatch, case: dict[str, Any]
+) -> None:
+    """The canvas hides the colour layer's points under the text (``dotsUnderText`` false); the SVG must too."""
+    fig = _fig(monkeypatch, case["request"])
+    ax = fig.axes[0]
+    assert case["dotsUnderText"] == [False]
+    for coll in ax.collections:
+        assert all(size == 0 for size in coll.get_sizes()), "a coloured dot is still drawn under the text"
+    # the colour bar survives: the mapping stays legible even though the dots are the text
+    assert len(fig.axes) == 2
+    # and the same export as an SVG really holds the labels (they are what the user opens)
+    svg = client.post("/api/export/figure", json=case["request"])
+    assert svg.status_code == 200
+    body = svg.content.decode("utf-8", "replace")
+    assert body.count('id="text-symbol') >= len(case["canvas"][0])

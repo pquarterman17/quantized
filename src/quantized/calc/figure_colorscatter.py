@@ -26,6 +26,7 @@ from numpy.typing import NDArray
 from quantized.calc.figure_bubble_pad import tag_bubbles
 from quantized.calc.figure_sizes import add_size_legend, size_diameters
 from quantized.calc.figure_styles import FigureStyle
+from quantized.calc.figure_text_symbols import apply_point_texts
 from quantized.heavy_import import heavy_imports
 
 __all__ = ["GRADIENT_STOPS", "MARKER_CODES", "draw_color_scatter", "gradient_colors"]
@@ -168,15 +169,16 @@ def draw_color_scatter(
         size = np.asarray(np.where(np.isfinite(diam), diam, 0.0) ** 2, dtype=float)
     if spec.get("color_stops") and spec.get("color_lim"):
         out = _draw_gradient(fig, ax, xv[:n], yv[:n], z[:n], label, spec, size)
-        if diam is not None:
-            tag_bubbles(out, diam)
-            add_size_legend(ax, spec, "0.35", "o")
-        return out
-    sc = ax.scatter(
-        xv[:n], yv[:n], c=z[:n], cmap=str(spec.get("colormap") or "viridis"), s=size, label=label
-    )
-    fig.colorbar(sc, ax=ax)
+    else:
+        out = ax.scatter(
+            xv[:n], yv[:n], c=z[:n], cmap=str(spec.get("colormap") or "viridis"), s=size, label=label
+        )
+        fig.colorbar(out, ax=ax)
     if diam is not None:
-        tag_bubbles(sc, diam)
+        tag_bubbles(out, diam)
         add_size_legend(ax, spec, "0.35", "o")
-    return _hollow(sc, spec)
+    if spec.get("marker_text") is not None or spec.get("marker_texts") is not None:
+        # Plan item 24: the text replaces the dots, in the series colour as the canvas draws it.
+        apply_point_texts(ax, out, xv, yv, spec, spec.get("color") or "0.35")
+        return out
+    return out if spec.get("color_stops") and spec.get("color_lim") else _hollow(out, spec)

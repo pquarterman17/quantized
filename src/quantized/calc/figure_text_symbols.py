@@ -33,6 +33,7 @@ __all__ = [
     "TEXT_SWATCH_ATTR",
     "TEXT_SYMBOL_MAX",
     "TEXT_SYMBOL_PT",
+    "apply_point_texts",
     "apply_text_symbols",
     "row_texts",
     "text_swatch",
@@ -73,18 +74,15 @@ def text_symbol(spec: Mapping[str, Any] | None) -> tuple[str, float, int] | None
     return text, float(size) if ok else TEXT_SYMBOL_PT, int(every) if good else 1  # type: ignore[arg-type]
 
 
-def apply_text_symbols(line: Any, spec: Mapping[str, Any] | None) -> None:
-    """Replace ``line``'s glyphs with ``spec``'s text (module doc). The line keeps its data, so the
-    limits do not change; its marker is cleared and one ``Text`` per kept point is added."""
+def _place_texts(
+    ax: Any, xs: Any, ys: Any, idx: Any, spec: Mapping[str, Any] | None, colour: Any, zorder: float
+) -> tuple[str, float] | None:
+    """Draw ``spec``'s text at the drawn rows among ``idx`` (the kept rows of module doc), in ``colour``.
+    Returns the (first character, size) of the legend swatch, or None when nothing is drawn."""
     sym = text_symbol(spec)
-    ax = getattr(line, "axes", None)
-    if sym is None or ax is None:
-        return
+    if sym is None:
+        return None
     text, size, every = sym
-    xs = np.asarray(line.get_xdata(), dtype=float)
-    ys = np.asarray(line.get_ydata(), dtype=float)
-    base = line.get_markevery()
-    idx = [int(i) for i in base] if isinstance(base, list | tuple | np.ndarray) else range(len(ys))
     drawn = [i for i in idx if i < len(ys) and np.isfinite(xs[i]) and np.isfinite(ys[i])]
     rows = drawn[::every]
     if len(rows) > TEXT_SYMBOL_MAX:
@@ -100,21 +98,49 @@ def apply_text_symbols(line: Any, spec: Mapping[str, Any] | None) -> None:
             f"{'its text' if text.strip() else 'plain glyphs'}."
         )
     if per_row is None and not text.strip():
-        return  # per-row texts that do not fit the rows, and no literal text: the glyphs stay
-    line.set_marker("")
+        return None  # per-row texts that do not fit the rows, and no literal text: the glyphs stay
     pool = (text if per_row is None else "", *(per_row or []))
     first = next((t for t in pool if t and t.strip()), "")
-    if first:
-        setattr(line, TEXT_SWATCH_ATTR, (first.strip()[0], size))
-    colour = line.get_color()
     for i in rows:
         own = text if per_row is None else per_row[i]
         if not own:
             continue
         ax.text(
             xs[i], ys[i], own, ha="center", va="center", fontsize=size, color=colour,
-            clip_on=True, zorder=line.get_zorder() + 0.1, gid="text-symbol",
+            clip_on=True, zorder=zorder + 0.1, gid="text-symbol",
         )
+    return (first.strip()[0], size) if first else ("", size)
+
+
+def apply_text_symbols(line: Any, spec: Mapping[str, Any] | None) -> None:
+    """Replace ``line``'s glyphs with ``spec``'s text (module doc). The line keeps its data, so the
+    limits do not change; its marker is cleared and one ``Text`` per kept point is added."""
+    ax = getattr(line, "axes", None)
+    if ax is None or text_symbol(spec) is None:
+        return
+    xs = np.asarray(line.get_xdata(), dtype=float)
+    ys = np.asarray(line.get_ydata(), dtype=float)
+    base = line.get_markevery()
+    idx = [int(i) for i in base] if isinstance(base, list | tuple | np.ndarray) else range(len(ys))
+    swatch = _place_texts(ax, xs, ys, idx, spec, line.get_color(), line.get_zorder())
+    if swatch is None:
+        return
+    line.set_marker("")
+    if swatch[0]:
+        setattr(line, TEXT_SWATCH_ATTR, swatch)
+
+
+def apply_point_texts(ax: Any, collection: Any, xs: Any, ys: Any, spec: Mapping[str, Any] | None, colour: Any) -> bool:
+    """Text symbols on a colour-mapped scatter (a ``PathCollection``, not a ``Line2D``): the series'
+    ``xs``/``ys`` rows, the same rule as :func:`apply_text_symbols`. The string replaces the dots, so
+    they are hidden (size 0) and the colour bar stays. True when a text symbol was drawn."""
+    xv = np.asarray(xs, dtype=float)
+    yv = np.asarray(ys, dtype=float)
+    swatch = _place_texts(ax, xv, yv, range(len(yv)), spec, colour, collection.get_zorder())
+    if swatch is None:
+        return False
+    collection.set_sizes([0.0])
+    return True
 
 
 def text_swatch(handle: Any) -> Any:

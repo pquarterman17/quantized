@@ -21,7 +21,7 @@ import { dropLinePlugins, seriesStrokeColor } from "./uplotDropLines";
 import { lineStyleSpec } from "./lineStyleSanitize";
 import { rugPlugins } from "./uplotRug";
 import { lineFrontPlugin } from "./uplotLineStyle";
-import { textSymbolPlugins } from "./uplotTextSymbols";
+import { textSymbolPlugins, textSymbolSpec } from "./uplotTextSymbols";
 import { stackTotalPlugins } from "./uplotStackTotals";
 import type uPlot from "uplot";
 
@@ -42,7 +42,7 @@ export function sizeScatterPlugin(specs: Map<number, ColorScatterSpec>): uPlot.P
         const shown: ColorScatterSpec[] = [];
         for (const [col, spec] of specs) {
           const ys = u.data[col];
-          if (!ys || !spec.diam || u.series[col]?.show === false) continue;
+          if (!ys || !spec.diam || spec.text || u.series[col]?.show === false) continue;
           shown.push(spec);
           const scaleKey = u.series[col]?.scale ?? "y";
           const flat = seriesStrokeColor(u, col);
@@ -134,6 +134,15 @@ export function withSizes(
     spec.diam = ds.values.map((row) => sizeDiameter(key, row[sizeCh]));
     if (out === base) out = new Map(base);
     out.set(p + 1, spec);
+  });
+  // Plan item 24: a text symbol replaces the glyph, so the colour layer does not paint its points beneath the text.
+  plotted.forEach((ch, p) => {
+    const spec = out.get(p + 1);
+    const st = styles[ch];
+    // `markerTextFrom` is the per-row source: its texts are derived later (withMarkerTexts), so the raw style names it.
+    if (!spec || spec.text || !st || st.bars || (st.markerTextFrom == null && !textSymbolSpec(st))) return;
+    if (out === base) out = new Map(base);
+    out.set(p + 1, { ...spec, text: true });
   });
   return out;
 }
