@@ -4,7 +4,7 @@
 // changes, inputs and settings recorded; the sources are never edited):
 //   grid     X, Y, Z columns of the active worksheet -> a regular map
 //            (/api/map-ops/grid; analysis-view rows only, finite rows only)
-//   formula  the active map's values from an expression of x, y, z
+//   formula  the map in use's values (windows mode: the focused map window's; classic: the active map) from an expression of x, y, z
 //   extract  the value at (x, y) in every selected map -> one row per map
 
 import { useEffect, useMemo, useState } from "react";
@@ -15,6 +15,7 @@ import type { CommitSettings } from "../../../lib/committedOutput";
 import { sameAxes } from "../../../lib/mapBoxSpace";
 import { extractionColumns, useMapPick } from "../../../lib/mapPick";
 import { polygonRefusal } from "../../../lib/roiPolygon";
+import { mapJobDatasetId } from "../../../lib/windowLayout/mapCard";
 import type { DataStruct, Dataset } from "../../../lib/types";
 import { commitComputedOutput } from "../../../store/commitComputedOutput";
 import { useActiveDataset, useApp } from "../../../store/useApp";
@@ -53,7 +54,10 @@ export interface MapGridState {
   mode: MapGridMode;
   setMode: (m: MapGridMode) => void;
   hasActive: boolean;
+  /** The map the formula and extraction act on (windows mode: the map window in use), or null. */
   isMap: boolean;
+  /** Name of that map, for the panel's one-line "acts on" note. */
+  targetName: string | null;
   columns: PickColumn[];
   picks: [number, number, number];
   setPick: (slot: 0 | 1 | 2, index: number) => void;
@@ -93,16 +97,20 @@ export function useMapGrid(): MapGridState {
   const [grid, setGridState] = useState(emptyGridForm);
   const [formula, setFormulaState] = useState(emptyFormulaForm);
   const [extract, setExtractState] = useState(emptyExtractForm);
-  const [skipped, setSkipped] = useState<readonly string[]>([]);
+  // The user's own tick changes; an untouched map follows the default (the map being acted on in windows mode, else all).
+  const [ticks, setTicks] = useState<Readonly<Record<string, boolean>>>({});
   const [error, setError] = useState<string | null>(null);
 
+  const targetId = useApp((s) => mapJobDatasetId(s.layoutMode === "windows", s.plotWindows, s.datasets, s.activeId, s.windowLayout));
+  const windowsMode = useApp((s) => s.layoutMode === "windows");
+  const target = datasets.find((d) => d.id === targetId) ?? null;
   const columns = useMemo(() => pickColumns(active ?? null), [active]);
   const dflt = defaults(columns, active ?? null);
   const mine = userPicks && userPicks.id === active?.id ? userPicks.picks : null;
   const valid = (mine ?? dflt).map((p, i) => validPick(columns, p, dflt[i]!));
   // Only defaults are forced apart; a duplicate the user picked is refused at Apply, not rewritten.
   const picks = mine ? (valid as [number, number, number]) : distinctPicks(valid, columns);
-  const maps = datasets.filter((d) => isMap(d.data)).map((d) => ({ id: d.id, name: d.name, selected: !skipped.includes(d.id) }));
+  const maps = datasets.filter((d) => isMap(d.data)).map((d) => ({ id: d.id, name: d.name, selected: ticks[d.id] ?? (windowsMode && target ? d.id === target.id : true) }));
 
   const commit = (sources: Dataset[], settings: CommitSettings, name: string, data: DataStruct): void => {
     const outcome = commitComputedOutput({
@@ -136,10 +144,10 @@ export function useMapGrid(): MapGridState {
   };
 
   const runFormula = async (signal: AbortSignal): Promise<void> => {
-    if (!active || !isMap(active.data)) throw new Error("Select a 2-D map to set its values from a formula.");
+    if (!target) throw new Error("Select a 2-D map to set its values from a formula." + (windowsMode ? " No map window is in use." : ""));
     const built = buildFormulaRequest(formula);
     if (built.error !== undefined) throw new Error(built.error);
-    const a = await resolveDataset(active.id);
+    const a = await resolveDataset(target.id);
     if (!a) throw new Error("the map is unavailable");
     signal.throwIfAborted();
     const out = await mapFormula({ ...built.req, dataset: a.data }, signal);
@@ -191,8 +199,9 @@ export function useMapGrid(): MapGridState {
     if (!mapRoi) { setError("Draw a box on the map first (Box tool in the map toolbar)."); return; }
     // The extraction reads each map on its own axes: an angular box is those axes on an RSM, and a plain-map box is
     // fine when it was drawn on exactly that pair. A Q box is on other axes.
-    const own = active ? extractionColumns(active.data) : null;
-    const ownAxes: [string, string] | null = own && active ? [active.data.labels[own[0]]!, active.data.labels[own[1]]!] : null;
+    const ref = target ?? active;
+    const own = ref ? extractionColumns(ref.data) : null;
+    const ownAxes: [string, string] | null = own && ref ? [ref.data.labels[own[0]]!, ref.data.labels[own[1]]!] : null;
     const ok = mapRoi.space === "angular" || (mapRoi.space === "map" && sameAxes(mapRoi.axes, ownAxes));
     if (!ok) { setError(mapRoi.space === "q" ? "The box was drawn in Q space; pixel extraction reads each map's own axes. Draw it on the angular view." : "The box was drawn on axes other than the ones pixel extraction reads; draw it on the map's own axes, or pick a point instead."); return; }
     setError(null);
@@ -204,7 +213,8 @@ export function useMapGrid(): MapGridState {
     mode,
     setMode: (m) => { setModeState(m); setError(null); },
     hasActive: !!active,
-    isMap: isMap(active?.data),
+    isMap: target !== null,
+    targetName: target?.name ?? null,
     columns,
     picks,
     setPick: (slot, index) => setUserPicks(() => {
@@ -219,7 +229,7 @@ export function useMapGrid(): MapGridState {
     extract,
     setExtract: (patch) => setExtractState((f) => ({ ...f, ...patch })),
     maps,
-    toggleMap: (id) => setSkipped((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id])),
+    toggleMap: (id) => setTicks((t) => ({ ...t, [id]: !(maps.find((m) => m.id === id)?.selected ?? true) })),
     hasDrawnBox: mapRoi != null || mapPolygon != null,
     boxCentre,
     pickedOn: pick ? `${pick.axes[0]} / ${pick.axes[1]}` : null,

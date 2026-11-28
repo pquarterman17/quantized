@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { defaultPlotView, type PlotWindow } from "../plotview";
 import type { Dataset } from "../types";
 import { dock, emptyLayout } from "./ops";
-import { mapCardDatasetId } from "./mapCard";
+import { mapCardDatasetId, mapJobDatasetId } from "./mapCard";
 
 const ds = (id: string): Dataset => ({ id, name: `${id}.xrdml`, data: { time: [0], values: [[0]], labels: ["a"], units: [""], metadata: {} } });
 const win = (id: string, kind: PlotWindow["kind"], datasetId: string, z: number, winState: PlotWindow["winState"] = "normal"): PlotWindow => ({
@@ -37,5 +37,29 @@ describe("mapCardDatasetId", () => {
     expect(mapCardDatasetId([win("m1", "map", "a", 1)], datasets, "a", emptyLayout())).toBeNull();
     expect(mapCardDatasetId([win("m1", "map", "gone", 1)], datasets, "gone", layoutOf("m1"))).toBeNull();
     expect(mapCardDatasetId([], datasets, "a", null)).toBeNull();
+  });
+});
+
+describe("mapJobDatasetId", () => {
+  const m = (id: string): Dataset => ({ ...ds(id), data: { ...ds(id).data, metadata: { is2D: true } } });
+  const sets = [ds("sheet"), m("a"), m("b")];
+  const wins = [win("m1", "map", "a", 1), win("m2", "map", "b", 2)];
+  const lay = layoutOf("m1", "m2");
+
+  it("windows mode: the front map window, else the active map, never a sheet", () => {
+    expect(mapJobDatasetId(true, wins, sets, "sheet", lay)).toBe("b");
+    expect(mapJobDatasetId(true, [win("p", "plot", "sheet", 1)], sets, "a", layoutOf("p"))).toBe("a");
+    expect(mapJobDatasetId(true, [win("p", "plot", "sheet", 1)], sets, "sheet", layoutOf("p"))).toBeNull();
+  });
+
+  it("never a non-map: a map window over a plain sheet falls back to the active map, else none", () => {
+    const front = [win("m0", "map", "sheet", 3)];
+    expect(mapJobDatasetId(true, front, sets, "a", layoutOf("m0"))).toBe("a");
+    expect(mapJobDatasetId(true, front, sets, "sheet", layoutOf("m0"))).toBeNull();
+  });
+
+  it("classic mode: the active dataset when it is a map", () => {
+    expect(mapJobDatasetId(false, wins, sets, "a", null)).toBe("a");
+    expect(mapJobDatasetId(false, wins, sets, "sheet", null)).toBeNull();
   });
 });

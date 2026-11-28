@@ -17,9 +17,18 @@ import { useMapGrid, type MapGridState } from "./useMapGrid";
 const gap = { marginTop: 8 } as const;
 const faint = { color: "var(--text-faint)" } as const;
 
+function Target({ m }: { m: MapGridState }) {
+  return (
+    <div className="qzk-helptext" style={{ marginBottom: 8 }}>
+      {m.targetName ? `Acts on map: ${m.targetName}` : "No map in use: focus a map window or select a 2-D map."}
+    </div>
+  );
+}
+
 function FormulaFields({ m }: { m: MapGridState }) {
   return (
     <>
+      <Target m={m} />
       <label className="qzk-field-lbl">Value = </label>
       <input
         className="qzk-input"
@@ -33,7 +42,6 @@ function FormulaFields({ m }: { m: MapGridState }) {
       <div className="qzk-helptext" style={{ ...gap, ...faint }}>
         x and y are each cell&apos;s coordinates, z its value. Operators + - * / // % ^ **, pi, e, nan and sin, cos, exp, log, log10, sqrt, abs, atan2, hypot, min, max. Comparisons, conditionals and column names are refused. The result is a new map; the original is untouched.
       </div>
-      {!m.isMap && <div className="qzk-helptext" style={gap}>Select a 2-D map to use this.</div>}
     </>
   );
 }
@@ -41,6 +49,7 @@ function FormulaFields({ m }: { m: MapGridState }) {
 function ExtractFields({ m }: { m: MapGridState }) {
   return (
     <>
+      <Target m={m} />
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
         <NumberField aria-label="Location X" placeholder="X" value={m.extract.x} onChange={(v) => m.setExtract({ x: v })} />
         <NumberField aria-label="Location Y" placeholder="Y" value={m.extract.y} onChange={(v) => m.setExtract({ y: v })} />
