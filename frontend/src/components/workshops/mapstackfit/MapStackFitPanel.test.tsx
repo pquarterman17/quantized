@@ -111,6 +111,14 @@ describe("Map stack fit", () => {
     expect(submitMock).not.toHaveBeenCalled();
   });
 
+  it("refuses a stack whose maps all have the same value", async () => {
+    await openFromCommand();
+    for (const n of layers) fireEvent.change(screen.getByLabelText(`Value for ${n}`), { target: { value: "5" } });
+    fireEvent.click(screen.getByRole("button", { name: /Fit every pixel/ }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/all have the same value/);
+    expect(submitMock).not.toHaveBeenCalled();
+  });
+
   it("a cancel writes nothing and the Cancel button asks the job to stop", async () => {
     const { JobCancelledError } = await import("../../../lib/jobs");
     let release: (e: unknown) => void = () => undefined;

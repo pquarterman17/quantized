@@ -36,7 +36,7 @@ export function buildStackRequest(
   const x = xText.map((t) => (t.trim() === "" ? NaN : Number(t)));
   const badX = x.findIndex((v) => !Number.isFinite(v));
   if (badX >= 0) return { error: `Enter a number for ${layers[badX]!.name} (its value of ${form.xLabel || "the independent variable"}).` };
-  if (new Set(x).size < 2) return { error: "The maps all have the same value; a curve needs them to differ." };
+  if (Math.min(...x) === Math.max(...x)) return { error: "The maps all have the same value; a curve needs them to differ." };
   const start = form.rows.map((r) => field(r.start));
   const lower = form.rows.map((r) => field(r.lower));
   const upper = form.rows.map((r) => field(r.upper));
