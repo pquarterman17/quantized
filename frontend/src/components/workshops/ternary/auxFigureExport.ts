@@ -14,6 +14,7 @@
 import { askExcludedRows } from "../../../lib/excludedRowsChoice";
 import { exportActive } from "../../../lib/exportActive";
 import { analysisData, droppedRows } from "../../../lib/rowstate";
+import { windowForExport } from "./auxRowWindow";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 
@@ -26,11 +27,15 @@ export interface AuxExport<Spec> {
   send: (spec: Spec, signal: AbortSignal) => Promise<void>;
   /** Why `build` returned null — surfaces as the export-failed toast. */
   empty: string;
+  /** Cut the sheet to the plot's row window first (the polar map and the G15 plots). A window that cannot be applied
+   *  is refused. Absent: the figure draws every row, as the ternary and vector-field workshops do. */
+  rowWindow?: boolean;
 }
 
 export function exportAuxFigure<Spec>(opts: AuxExport<Spec>): Promise<void> {
   const store = useApp.getState;
-  return exportActive(store, async (stem, ds, signal) => {
+  return exportActive(store, async (stem, full, signal) => {
+    const ds = opts.rowWindow ? windowForExport(full, store().rowRange) : full;
     if (droppedRows(ds).size > 0) {
       const choice = await askExcludedRows(store().excludedDisplay, AUX_OMIT_REASON);
       if (choice === null) return false;

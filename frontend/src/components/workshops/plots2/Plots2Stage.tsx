@@ -58,7 +58,7 @@ export default function Plots2Stage({ kind }: { kind: Plots2Kind }) {
           alt={`${TITLES[kind]} preview`}
         />
       </div>
-      <PlotRowRangeChip drawsEvery />
+      <PlotRowRangeChip alt />
       {back}
     </div>
   );

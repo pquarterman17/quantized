@@ -345,7 +345,7 @@ export default function StatStage() {
           Select a dataset to plot
         </div>
       )}
-      <PlotRowRangeChip drawsEvery={false} />
+      <PlotRowRangeChip alt />
       {st.hasData && st.error && (
         <div
           className="qzk-ds-meta"
