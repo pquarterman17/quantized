@@ -13,7 +13,7 @@
 // the empty token with the cursor placed inside the braces (unchanged
 // palette-click behaviour, reused as-is).
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 
 import { hasMarkup } from "../../lib/richtext";
 import { validateRichText } from "../../lib/richtextValidate";
@@ -55,10 +55,13 @@ export default function RichLabelInput({ value, onCommit, placeholder, labelledB
   const inputRef = useRef<HTMLInputElement>(null);
   const omegaRef = useRef<HTMLButtonElement>(null);
 
-  // Mirror store -> field when it changes elsewhere (dataset switch / reset).
-  useEffect(() => {
+  // Mirror store -> field when it changes elsewhere (dataset switch / reset). Resynced during render, not in an
+  // effect: a mount-time effect lands after the first commit and would overwrite what the user had already typed.
+  const [seen, setSeen] = useState(value);
+  if (seen !== value) {
+    setSeen(value);
     setDraft(value);
-  }, [value]);
+  }
 
   const commit = (v: string): void => {
     if (v !== value) onCommit(v);
