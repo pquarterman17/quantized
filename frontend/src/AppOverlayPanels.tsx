@@ -148,6 +148,7 @@ const ReflView = lazyPanel(() => import("./components/workshops/reflview/ReflVie
 const TrashPanel = lazyPanel(() => import("./components/workshops/trash/TrashPanel"), "TrashPanel");
 const SearchPanel = lazyPanel(() => import("./components/workshops/search/SearchPanel"), "SearchPanel");
 const HelpDialog = lazyPanel(() => import("./components/overlays/HelpDialog"), "HelpDialog");
+const LearningHost = lazyPanel(() => import("./components/overlays/learning/LearningHost"), "LearningHost");
 // These ordinary dialogs have no startup responsibility: their store flags are
 // already in this composition root, so loading them only when opened removes
 // their implementation (and dialog-only helpers) from first-paint JS.
@@ -178,9 +179,7 @@ const AnnotationTextDialog = lazyPanel(() => import("./components/overlays/Annot
 const ShortcutsDialog = lazyPanel(() => import("./components/overlays/ShortcutsDialog"), "ShortcutsDialog");
 const TextFormatHelp = lazyPanel(() => import("./components/overlays/TextFormatHelp"), "TextFormatHelp");
 const PreferencesDialog = lazyPanel(() => import("./components/overlays/PreferencesDialog"), "PreferencesDialog");
-// No local state to preserve across toggles (purely `useHelp`-flag-driven),
-// so a plain lazyPanel — not useKeepMountedAfterOpen — matches its former
-// always-mounted-but-self-hiding behavior exactly.
+// No local state to preserve across toggles (purely `useHelp`-flag-driven): a plain lazyPanel.
 const WhatIsThis = lazyPanel(() => import("./components/overlays/WhatIsThis"), "WhatIsThis");
 // P1.2 box 5: the crash-recovery chooser. Rare (only when a startup autosave
 // candidate outdates the last-known named project — see
@@ -372,6 +371,7 @@ function MainPanels() {
       {searchOpen && <SearchPanel />}
       {shortcutsMounted && <ShortcutsDialog />}
       {helpOpen && <HelpDialog />}
+      <LearningHost />
       {textFormatHelpMounted && <TextFormatHelp />}
       {prefsMounted && <PreferencesDialog />}
       {recoveryPending && <RecoveryChoiceDialog />}
