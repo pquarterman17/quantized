@@ -157,7 +157,7 @@ async function saveFocusedAsTemplate(s: StoreGet, title: string, name: string, c
   const params = await askParams(title, [
     { key: "name", label: "Template name", type: "text", default: name },
     ...(byParts ? [{ key: "parts", label: "Save", type: "select" as const, default: WHOLE, options: [WHOLE, CHOOSE] }] : []),
-  ], { confirmLabel: byParts ? "Next" : confirmLabel });
+  ], { confirmLabel }); // "Save" either way: the default (Whole style) saves now; the "…" option asks for the parts next
   const picked = params ? String(params.name).trim() : "";
   if (!picked) return null;
   // A THEME: only the chosen parts (plan item 42); everything ticked is the ordinary whole template.
