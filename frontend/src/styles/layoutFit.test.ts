@@ -35,7 +35,8 @@ describe("plot dock + legend (P1)", () => {
 
   it("drops the NE legend below the dock on a stage that has one", () => {
     const body = bodiesFor(".qzk-stage:has(> .qzk-float-tools) > .qzk-legend.ne");
-    expect(body).toMatch(/top:\s*72px/);
+    // Below the dock (72px) or inside the plot frame, whichever is lower (acceptance 10 W3).
+    expect(body).toMatch(/top:\s*max\(72px,\s*calc\(var\(--qz-frame-top/);
   });
 
   it("keeps an auto legend inside the plot frame, and narrows the plot for an outside column", () => {
