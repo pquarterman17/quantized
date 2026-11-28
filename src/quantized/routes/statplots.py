@@ -149,6 +149,13 @@ class MarginalRequest(BaseModel):
     y: list[float]
     kind: str = "histogram"
     bins: str | Annotated[int, Field(ge=1, le=100_000)] = "fd"
+    # Opt-in encodings (calc.statplots_marginal): one value per (x, y) row.
+    group: list[int] | None = None
+    group_labels: list[str] | None = Field(default=None, max_length=64)
+    color: list[float] | None = None
+    color_label: str = ""
+    size: list[float] | None = None
+    size_label: str = ""
 
 
 @router.post("/marginal")
@@ -156,7 +163,13 @@ def marginal_route(req: MarginalRequest) -> dict[str, Any]:
     """The complete (x, y) pairs, their domains and the marginal distribution
     (histogram / box / rug) of each axis."""
     try:
-        return _wrap(marginal_series(req.x, req.y, kind=req.kind, bins=req.bins))
+        return _wrap(
+            marginal_series(
+                req.x, req.y, kind=req.kind, bins=req.bins, group=req.group,
+                group_labels=req.group_labels, color=req.color, color_label=req.color_label,
+                size=req.size, size_label=req.size_label,
+            )
+        )
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

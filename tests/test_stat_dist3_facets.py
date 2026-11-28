@@ -398,7 +398,7 @@ def test_route_refuses_what_a_faceted_variant_cannot_draw() -> None:
     other = CASES["facetPairedDirection"]["request"]["facets"][0]["dist3"]
     assert "panel" in detail({**req, "facets": [{**req["facets"][0], "dist3": other}]})
     ridge = {**req, "kind": "ridgeline", "ridgeline": {"overlap": 1, "bw": "scott"}}
-    assert "not faceted" in detail(ridge)
+    assert "each panel" in detail(ridge)  # a faceted ridgeline carries its options on its panels
     rug = {**CASES["facetStackBySplit"]["request"], "rug": {"length": 0.05, "opacity": 0.5}}
     assert "rug" in detail(rug)
     # a panel the plot cannot draw refuses; it is never skipped silently

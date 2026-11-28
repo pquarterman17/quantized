@@ -14193,14 +14193,38 @@ export interface components {
          * MarginalOptions
          * @description ``kind="marginal"``: what is drawn on the top and right strips
          *     (``calc.statplots_marginal``). The bin rule rides the request's ``bins``.
+         *
+         *     The opt-in encodings are parallel to ``data[0]`` / ``data[1]`` (one value per
+         *     complete row, as ``/api/statplots/marginal`` returned them): ``group`` ids (colour
+         *     ``g`` = palette entry ``g``) with ``group_labels``, a ``color`` column, a ``size``
+         *     column; ``color_label`` / ``size_label`` title their keys. A group split and a colour
+         *     column are mutually exclusive (refused by the calc).
          */
         MarginalOptions: {
+            /** Color */
+            color?: number[] | null;
+            /**
+             * Color Label
+             * @default
+             */
+            color_label?: string;
+            /** Group */
+            group?: number[] | null;
+            /** Group Labels */
+            group_labels?: string[] | null;
             /**
              * Kind
              * @default histogram
              * @enum {string}
              */
             kind?: "histogram" | "box" | "rug";
+            /** Size */
+            size?: number[] | null;
+            /**
+             * Size Label
+             * @default
+             */
+            size_label?: string;
         };
         /** MarginalRequest */
         MarginalRequest: {
@@ -14209,11 +14233,29 @@ export interface components {
              * @default fd
              */
             bins?: string | number;
+            /** Color */
+            color?: number[] | null;
+            /**
+             * Color Label
+             * @default
+             */
+            color_label?: string;
+            /** Group */
+            group?: number[] | null;
+            /** Group Labels */
+            group_labels?: string[] | null;
             /**
              * Kind
              * @default histogram
              */
             kind?: string;
+            /** Size */
+            size?: number[] | null;
+            /**
+             * Size Label
+             * @default
+             */
+            size_label?: string;
             /** X */
             x: number[];
             /** Y */
@@ -16614,6 +16656,33 @@ export interface components {
             result_id: string;
         };
         /**
+         * RidgePanelOptions
+         * @description ``kind="ridgeline"`` on a facet panel: the flat ridgeline's options
+         *     (``RidgelineOptions``) carried by the panel, since a faceted plot's options ride its panels.
+         */
+        RidgePanelOptions: {
+            /**
+             * Bw
+             * @default scott
+             */
+            bw?: ("scott" | "silverman") | number;
+            /**
+             * Each
+             * @default false
+             */
+            each?: boolean;
+            /**
+             * Overlap
+             * @default 1
+             */
+            overlap?: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "ridgeline";
+        };
+        /**
          * RidgelineOptions
          * @description ``kind="ridgeline"``: row overlap (the tallest peak, in row spacings) and
          *     the KDE bandwidth (``calc.statplots_ridgeline``); ranges are enforced there.
@@ -16624,6 +16693,11 @@ export interface components {
              * @default scott
              */
             bw?: ("scott" | "silverman") | number;
+            /**
+             * Each
+             * @default false
+             */
+            each?: boolean;
             /**
              * Overlap
              * @default 1
@@ -18027,7 +18101,7 @@ export interface components {
             /** Data */
             data: number[][];
             /** Dist3 */
-            dist3?: (components["schemas"]["SideViolinOptions"] | components["schemas"]["PairedOptions"] | components["schemas"]["LollipopOptions"] | components["schemas"]["StackOptions"]) | null;
+            dist3?: (components["schemas"]["SideViolinOptions"] | components["schemas"]["PairedOptions"] | components["schemas"]["LollipopOptions"] | components["schemas"]["StackOptions"] | components["schemas"]["RidgePanelOptions"]) | null;
             /** Kind */
             kind?: string | null;
             /** Label */
@@ -18071,7 +18145,7 @@ export interface components {
              */
             dist?: string;
             /** Dist3 */
-            dist3?: (components["schemas"]["SideViolinOptions"] | components["schemas"]["PairedOptions"] | components["schemas"]["LollipopOptions"] | components["schemas"]["StackOptions"]) | null;
+            dist3?: (components["schemas"]["SideViolinOptions"] | components["schemas"]["PairedOptions"] | components["schemas"]["LollipopOptions"] | components["schemas"]["StackOptions"] | components["schemas"]["RidgePanelOptions"]) | null;
             /** Dpi */
             dpi?: number | null;
             /** Error Bars */

@@ -267,7 +267,7 @@ export async function exportFacetedFigure(
   const caveat = o.caveat ?? null;
   const m = o.marks ?? null;
   if (!drawFacets || drawFacets.length === 0) return;
-  if (mode === "sideviolin" || mode === "paired" || mode === "lollipop" || mode === "histogram") {
+  if (mode === "sideviolin" || mode === "paired" || mode === "lollipop" || mode === "histogram" || mode === "ridgeline") {
     const v = variantFacetSpec(drawFacets, o.bins ?? "fd", fmt); // item 20: each panel as the plot is drawn alone
     if (v) await deliver({ route: "statplot", spec: { ...v, ...paletteWire() } }, signal, out);
     return;

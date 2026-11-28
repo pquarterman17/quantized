@@ -130,6 +130,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   const { marksMode, marks, patchMarks } = useStatMarksState(mode, params);
   const grouped = effectiveGroupCol != null;
   const splitHist = mode === "histogram" && dist2.histSplit && grouped; // a histogram series per "group by" level
+  const splitMarginal = mode === "marginal" && dist2.marginalSplit && grouped; // the marginal's strips split by the "group by" level (its own pick, not the histogram's `histSplit`)
   const facetVar = facetVariant(mode); // the item 20 variants draw one panel per facet level too
   const facetOn = effectiveFacetCol != null && (marksMode != null || facetVar != null);
   // The marks before the bar data is known: points / summary (all that
@@ -247,7 +248,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
         valueLabel, groupLabel, points: wantPoints ? { rowIds } : null,
         bar: { channels: barValueChannels, labels: barLabels, valueLabel: barValueLabel, stack: barStack, errChannels: barErrorChannels, raw: barRaw ? { rowIds } : null },
         variantOpts: {
-          groupCol: effectiveGroupCol, group2Col: nestCol, valueCol, plotted, histCols, splitHist, pairedCi: dist2.pairedCi, bins,
+          groupCol: effectiveGroupCol, group2Col: nestCol, valueCol, plotted, histCols, splitHist, pairedCi: dist2.pairedCi, bins, ridgeOverlap: dist2.ridgeOverlap, ridgeEach: dist2.ridgeEach,
           side: dist2.violinSide, bw: dist2.ridgeBw, stat: dist2.lollipopStat, sort: dist2.lollipopSort, nestLabel,
           valueLabel: mode === "histogram" || effectiveGroupCol != null ? valueLabel : "value", // the flat draws' own label rule
         },
@@ -293,7 +294,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
       } else if (isDistGroupMode(mode)) {
         const ridgeLabel = effectiveGroupCol != null ? valueLabel : "value"; // per-channel groups share no one column
         void (mode === "ridgeline"
-          ? computeRidgelineDraw(finiteGroups, ridgeLabel, dist2.ridgeOverlap, dist2.ridgeBw)
+          ? computeRidgelineDraw(finiteGroups, ridgeLabel, dist2.ridgeOverlap, dist2.ridgeBw, dist2.ridgeEach)
           : computeGroupedDraw(mode, finiteGroups, { side: dist2.violinSide, bw: dist2.ridgeBw, stat: dist2.lollipopStat, sort: dist2.lollipopSort, valueLabel: ridgeLabel, nestLabel })
         )
           .then((draw) => !cancelled && setDrawData(draw))
@@ -325,7 +326,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
       (mode === "paired"
         ? Promise.resolve().then(() => computePairedDraw(data, { yCol: valueCol, histCols, ci: dist2.pairedCi }))
         : mode === "marginal"
-        ? computeMarginalDraw(data, { yCol: valueCol, histCols, kind: dist2.marginal, bins })
+        ? computeMarginalDraw(data, { yCol: valueCol, histCols, kind: dist2.marginal, bins, groupCol: splitMarginal ? effectiveGroupCol : null, colorCol: dist2.marginalColor, sizeCol: dist2.marginalSize })
         : computeSampleDraw(mode, data, { valueCol, histCols, dist, bins, fit, valueLabel, cdfY, cdfBand, groups: splitHist ? groups : undefined }))
         .then((d) => { if (!cancelled) { setDrawData(d); if (d.mode === "cdf" && d.wire.local) setNote("backend unavailable — CDF computed locally (a fitted CDF needs the server)"); } }) // item 20: no server
         .catch(failed)
@@ -351,6 +352,10 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     dist2.marginal,
     dist2.ridgeOverlap,
     dist2.ridgeBw,
+    dist2.ridgeEach,
+    dist2.marginalSize,
+    dist2.marginalColor,
+    splitMarginal,
     dist2.violinSide,
     dist2.lollipopStat,
     dist2.lollipopSort,

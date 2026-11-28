@@ -82,12 +82,24 @@ class StackOptions(BaseModel):
         return self
 
 
+class RidgePanelOptions(BaseModel):
+    """``kind="ridgeline"`` on a facet panel: the flat ridgeline's options
+    (``RidgelineOptions``) carried by the panel, since a faceted plot's options ride its panels."""
+
+    type: Literal["ridgeline"]
+    overlap: float = Field(default=1.0, allow_inf_nan=False)
+    bw: Literal["scott", "silverman"] | float = "scott"
+    each: bool = False
+
+
 Dist3Options = Annotated[
-    SideViolinOptions | PairedOptions | LollipopOptions | StackOptions, Field(discriminator="type")
+    SideViolinOptions | PairedOptions | LollipopOptions | StackOptions | RidgePanelOptions,
+    Field(discriminator="type"),
 ]
 
+Dist3Model = SideViolinOptions | PairedOptions | LollipopOptions | StackOptions | RidgePanelOptions
 _KIND = {"sideviolin": "sideviolin", "paired": "paired", "lollipop": "lollipop",
-         "stack": "histogram"}
+         "stack": "histogram", "ridgeline": "ridgeline"}
 # Kinds whose ``data`` is a list of lists (one per group / column).
 LISTED_KINDS = ("box", "violin", "strip", "cdf", "marginal", "ridgeline", "sideviolin", "paired",
                 "lollipop")
@@ -98,14 +110,14 @@ def check_dist_options(
     facets: Sequence[Any] | None,
     marginal: object,
     ridgeline: object,
-    dist3: SideViolinOptions | PairedOptions | LollipopOptions | StackOptions | None,
+    dist3: Dist3Model | None,
 ) -> str | None:
     """The 422 detail when the options contradict the kind or the layout, else None.
 
-    The marginal and ridgeline are one panel. The item 20 variants facet: the options of each
-    panel ride on that panel (``StatplotFacet.dist3``), not on the request."""
+    The marginal is one panel. The ridgeline and the item 20 variants facet: the options of
+    each panel ride on that panel (``StatplotFacet.dist3``), not on the request."""
     if (marginal or ridgeline) and facets:
-        return "marginal and ridgeline plots are not faceted"
+        return "the options of a faceted plot ride on each panel"
     if dist3 is not None and facets:
         return "the options of a faceted plot ride on each panel"
     if (marginal and kind != "marginal") or (ridgeline and kind != "ridgeline"):
@@ -119,7 +131,7 @@ def check_dist_options(
 
 
 # The kinds a faceted request draws here (``calc.figure_facets_dist3``).
-FACET_KINDS = ("sideviolin", "paired", "lollipop", "histogram")
+FACET_KINDS = ("sideviolin", "paired", "lollipop", "histogram", "ridgeline")
 
 
 def render_facets(

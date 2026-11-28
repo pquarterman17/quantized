@@ -15452,8 +15452,59 @@
         "type": "object"
       },
       "MarginalOptions": {
-        "description": "``kind=\"marginal\"``: what is drawn on the top and right strips\n(``calc.statplots_marginal``). The bin rule rides the request's ``bins``.",
+        "description": "``kind=\"marginal\"``: what is drawn on the top and right strips\n(``calc.statplots_marginal``). The bin rule rides the request's ``bins``.\n\nThe opt-in encodings are parallel to ``data[0]`` / ``data[1]`` (one value per\ncomplete row, as ``/api/statplots/marginal`` returned them): ``group`` ids (colour\n``g`` = palette entry ``g``) with ``group_labels``, a ``color`` column, a ``size``\ncolumn; ``color_label`` / ``size_label`` title their keys. A group split and a colour\ncolumn are mutually exclusive (refused by the calc).",
         "properties": {
+          "color": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "maxItems": 1000000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
+          },
+          "color_label": {
+            "default": "",
+            "maxLength": 200,
+            "title": "Color Label",
+            "type": "string"
+          },
+          "group": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "maxItems": 1000000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group"
+          },
+          "group_labels": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 64,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group Labels"
+          },
           "kind": {
             "default": "histogram",
             "enum": [
@@ -15462,6 +15513,27 @@
               "rug"
             ],
             "title": "Kind",
+            "type": "string"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "maxItems": 1000000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          },
+          "size_label": {
+            "default": "",
+            "maxLength": 200,
+            "title": "Size Label",
             "type": "string"
           }
         },
@@ -15484,9 +15556,76 @@
             "default": "fd",
             "title": "Bins"
           },
+          "color": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
+          },
+          "color_label": {
+            "default": "",
+            "title": "Color Label",
+            "type": "string"
+          },
+          "group": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group"
+          },
+          "group_labels": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 64,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group Labels"
+          },
           "kind": {
             "default": "histogram",
             "title": "Kind",
+            "type": "string"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          },
+          "size_label": {
+            "default": "",
+            "title": "Size Label",
             "type": "string"
           },
           "x": {
@@ -21559,6 +21698,47 @@
         "title": "ResultRequest",
         "type": "object"
       },
+      "RidgePanelOptions": {
+        "description": "``kind=\"ridgeline\"`` on a facet panel: the flat ridgeline's options\n(``RidgelineOptions``) carried by the panel, since a faceted plot's options ride its panels.",
+        "properties": {
+          "bw": {
+            "anyOf": [
+              {
+                "enum": [
+                  "scott",
+                  "silverman"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "default": "scott",
+            "title": "Bw"
+          },
+          "each": {
+            "default": false,
+            "title": "Each",
+            "type": "boolean"
+          },
+          "overlap": {
+            "default": 1.0,
+            "title": "Overlap",
+            "type": "number"
+          },
+          "type": {
+            "const": "ridgeline",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "title": "RidgePanelOptions",
+        "type": "object"
+      },
       "RidgelineOptions": {
         "description": "``kind=\"ridgeline\"``: row overlap (the tallest peak, in row spacings) and\nthe KDE bandwidth (``calc.statplots_ridgeline``); ranges are enforced there.",
         "properties": {
@@ -21577,6 +21757,11 @@
             ],
             "default": "scott",
             "title": "Bw"
+          },
+          "each": {
+            "default": false,
+            "title": "Each",
+            "type": "boolean"
           },
           "overlap": {
             "default": 1.0,
@@ -25276,6 +25461,7 @@
                   "mapping": {
                     "lollipop": "#/components/schemas/LollipopOptions",
                     "paired": "#/components/schemas/PairedOptions",
+                    "ridgeline": "#/components/schemas/RidgePanelOptions",
                     "sideviolin": "#/components/schemas/SideViolinOptions",
                     "stack": "#/components/schemas/StackOptions"
                   },
@@ -25293,6 +25479,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/StackOptions"
+                  },
+                  {
+                    "$ref": "#/components/schemas/RidgePanelOptions"
                   }
                 ]
               },
@@ -25523,6 +25712,7 @@
                   "mapping": {
                     "lollipop": "#/components/schemas/LollipopOptions",
                     "paired": "#/components/schemas/PairedOptions",
+                    "ridgeline": "#/components/schemas/RidgePanelOptions",
                     "sideviolin": "#/components/schemas/SideViolinOptions",
                     "stack": "#/components/schemas/StackOptions"
                   },
@@ -25540,6 +25730,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/StackOptions"
+                  },
+                  {
+                    "$ref": "#/components/schemas/RidgePanelOptions"
                   }
                 ]
               },

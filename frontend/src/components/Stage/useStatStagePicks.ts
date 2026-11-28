@@ -44,11 +44,11 @@ import { maskStaleCategoricalPicks, type StatMode } from "../../lib/statstage";
 import type { Dataset } from "../../lib/types";
 import type { StatStageSeed } from "../../store/useApp";
 
-/** The item 20 modes' options (marginal strips, ridgeline overlap and bandwidth, half / split
+/** The item 20 modes' options (marginal strips and size column, ridgeline overlap / bandwidth / per-ridge scale, half / split
  *  violin, paired CI, lollipop, stacked histogram), with their defaults. */
 export type Dist2Picks = Required<
-  Pick<StatPicks, "marginal" | "ridgeOverlap" | "ridgeBw" | "violinSide" | "pairedCi" | "lollipopStat" | "lollipopSort" | "histStack" | "violinMarks" | "pairedDirection" | "lollipopHoriz" | "histSplit" | "violinMean" | "violinRain" | "pairedTol" | "histPercent" | "lollipopWhisker">
->;
+  Pick<StatPicks, "marginal" | "ridgeOverlap" | "ridgeBw" | "violinSide" | "pairedCi" | "lollipopStat" | "lollipopSort" | "histStack" | "violinMarks" | "pairedDirection" | "lollipopHoriz" | "histSplit" | "violinMean" | "violinRain" | "pairedTol" | "histPercent" | "lollipopWhisker" | "ridgeEach" | "marginalSplit">
+> & Pick<StatPicks, "marginalSize" | "marginalColor">;
 
 export interface StatStagePicks {
   mode: StatMode;
@@ -245,6 +245,7 @@ export function useStatStagePicks(params: UseStatStagePicksParams): StatStagePic
       lollipopHoriz: picks.lollipopHoriz ?? false, histSplit: picks.histSplit ?? false,
       violinMean: picks.violinMean ?? false, violinRain: picks.violinRain ?? false, pairedTol: picks.pairedTol ?? 0,
       histPercent: picks.histPercent ?? false, lollipopWhisker: picks.lollipopWhisker ?? "none",
+      ridgeEach: picks.ridgeEach ?? false, marginalSplit: picks.marginalSplit ?? false, marginalSize: picks.marginalSize, marginalColor: picks.marginalColor,
     },
     setDist2: (patch) => write((p) => ({ ...p, ...patch }), "change statistics plot"),
     histCols: picks.histCols ?? NO_HIST_COLS,

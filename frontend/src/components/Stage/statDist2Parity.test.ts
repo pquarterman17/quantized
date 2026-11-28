@@ -215,7 +215,7 @@ describe("marginal plot: the canvas draws the fixture vertices", () => {
     // a strip vertex: `a` along the strip, `c` across it from the scatter's edge
     const top_ = (a: number, c: number): [number, number] => [top.x + ((a - x0) / (x1 - x0)) * top.w, top.y + top.h - c * top.h];
     const right_ = (a: number, c: number): [number, number] => [right.x + c * right.w, right.y + right.h - ((a - y0) / (y1 - y0)) * right.h];
-    const strips = [[top_, geo.strips.x], [right_, geo.strips.y]] as const;
+    const strips = [[top_, geo.strips!.x], [right_, geo.strips!.y]] as const;
     const has = (poly: [number, number][]) =>
       paths.some((p) => p.length === poly.length && p.every((v, i) => near(v.x, poly[i][0]) && near(v.y, poly[i][1])));
     for (const [map, s] of strips) {
@@ -233,7 +233,7 @@ describe("marginal plot: the canvas draws the fixture vertices", () => {
         expect(ticks.some((p) => s.ticks.every(([a, c0, c1], i) => near(p[2 * i].x, map(a, c0)[0]) && near(p[2 * i + 1].y, map(a, c1)[1]))), "rug ticks").toBe(true);
       }
     }
-    if (kind === "box") expect(geo.strips.x).toMatchObject({ kind: "box", fliers: [12] });
+    if (kind === "box") expect(geo.strips!.x).toMatchObject({ kind: "box", fliers: [12] });
   });
 });
 
@@ -343,9 +343,9 @@ describe("marginal and ridgeline: picks survive save and reopen", () => {
     expect([result.current.mode, result.current.dist2]).toEqual(["box", expect.objectContaining({ marginal: "histogram", ridgeOverlap: 1, ridgeBw: "scott" })]);
   });
 
-  it("an out-of-list pick is dropped on load (fail closed)", () => {
+  it("an out-of-range or malformed pick is dropped on load (fail closed)", () => {
     load("m", MDATA);
-    useApp.setState({ statPicks: { mode: "ridgeline", ridgeOverlap: 2.5 as 2, ridgeBw: "0.99" as "scott", marginal: "pie" as "box" } });
+    useApp.setState({ statPicks: { mode: "ridgeline", ridgeOverlap: 9, ridgeBw: "-1", marginal: "pie" as "box" } });
     const s = useApp.getState();
     const text = serializeWorkspace({ ...s, plotWindows: s.windowsForSave() });
     useApp.getState().loadWorkspace(parseWorkspace(text));

@@ -20,11 +20,13 @@ export interface RidgelineDraw {
   /** The tallest peak in row spacings, and the bandwidth the curves were made with. */
   overlap: number;
   bw: RidgeBw;
+  /** Every ridge scaled to its own peak (else one shared scale). */
+  each?: boolean;
   valueLabel: string;
 }
 
 export function drawRidgeline(ctx: CanvasRenderingContext2D, rect: Rect, d: RidgelineDraw, ink: string, muted: string) {
-  const geo = ridgelineGeometry(d.wire, d.overlap);
+  const geo = ridgelineGeometry(d.wire, d.overlap, d.each);
   const [x0, x1] = geo.domain;
   const [y0, y1] = geo.y_domain;
   const sx = (v: number) => rect.x + ((v - x0) / (x1 - x0)) * rect.w;

@@ -7,7 +7,8 @@
 //
 // One density scale for every group: the TALLEST peak is `overlap` row spacings
 // high. The first group is the TOP row; ridges are listed in drawing order, so a
-// lower ridge paints over the one above. Lazy only (the Stat Stage).
+// lower ridge paints over the one above. `each` (opt-in) scales every ridge to its OWN
+// peak instead, which is then `overlap` rows high. Lazy only (the Stat Stage).
 
 export type RidgeBw = "scott" | "silverman" | number;
 
@@ -27,11 +28,11 @@ export interface RidgelineGeometry {
   ridges: { base: number; fill: [number, number][]; line: [number, number][] }[];
 }
 
-export function ridgelineGeometry(r: RidgelineWire, overlap: number): RidgelineGeometry {
+export function ridgelineGeometry(r: RidgelineWire, overlap: number, each = false): RidgelineGeometry {
   const n = r.groups.length;
-  const scale = overlap / r.d_max;
   const ridges = r.groups.map((g, k) => {
     const base = n - 1 - k;
+    const scale = overlap / (each ? Math.max(...g.density) : r.d_max);
     const line = g.x.map((x, i): [number, number] => [x, base + g.density[i] * scale]);
     const fill: [number, number][] = [[line[0][0], base], ...line, [line[line.length - 1][0], base]];
     return { base, fill, line };
