@@ -80,6 +80,13 @@ export function resolveFigureTarget(st: FigureTargetState): FigureTarget {
   }
 }
 
+/** The id of the front window when it is a plot window (null otherwise): which plot "the plot" means once
+ *  `resolveFigureTarget` says plot, for a command (Publication preview) that must name it. */
+export function frontPlotWindowId(st: FigureTargetState): string | null {
+  const front = frontWindow(onScreen(st));
+  return front?.kind === "plot" ? front.id : null;
+}
+
 export type FigureVerb = "export" | "copy" | "send";
 
 function refuse(s: StoreGet, message: string): void {
