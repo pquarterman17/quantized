@@ -8,6 +8,8 @@ import type { AnalysisResult } from "../../../lib/analysisResult";
 import { distributionRecipe } from "../../../lib/distributionAnalysisResult";
 import { fitModelRecipe } from "../../../lib/fitModelRecipe";
 import { fitYByXRecipe } from "../../../lib/fitYByXAnalysisResult";
+import { withTextGroupChannels } from "../../../lib/groupableColumns";
+import { textPicksHold } from "../../../lib/textPickResult";
 import { multivariateRecipe } from "../../../lib/multivariateAnalysisResult";
 import { outlierScreeningRecipe } from "../../../lib/outlierScreeningAnalysisResult";
 import { statisticalTestRecipe } from "../../../lib/statisticalTestAnalysisResult";
@@ -39,9 +41,14 @@ export function snapshotReopener(
   if (stats) return () => useStatsTestsStore.getState().openWith(stats);
   const distribution = distributionRecipe(result, source);
   if (distribution) return () => { useDistributionRequestStore.getState().openWith(distribution); useApp.setState({ distributionOpen: true }); };
-  const fitYByX = fitYByXRecipe(result, source);
+  // A pick may name a CSV text column (an index past the real channels), see lib/textPickResult.
+  const grouped = source ? withTextGroupChannels(source) : source;
+  const holds = (picks: readonly (number | null)[]) => !source || textPicksHold(result, source, picks);
+  const fitYByXPicks = fitYByXRecipe(result, grouped);
+  const fitYByX = fitYByXPicks && holds([fitYByXPicks.xCol, fitYByXPicks.yCol, fitYByXPicks.byCol]) ? fitYByXPicks : null;
   if (fitYByX) return () => useFitYByXStore.getState().openWith(fitYByX);
-  const variability = variabilityRecipe(result, source);
+  const variabilityPicks = variabilityRecipe(result, grouped);
+  const variability = variabilityPicks && holds([variabilityPicks.responseCol, variabilityPicks.factorACol, variabilityPicks.factorBCol]) ? variabilityPicks : null;
   if (variability) return () => useVariabilityStore.getState().openWith(variability);
   const fitModel = fitModelRecipe(result, source);
   if (fitModel) return () => useFitModelStore.getState().openWith(fitModel);

@@ -4,6 +4,7 @@
 
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
 import type { DataStruct, Dataset } from "../../../lib/types";
+import { seedNumbers } from "../resultcommit/useReopenSession";
 
 export const colValues = (data: DataStruct, index: number): number[] =>
   index < 0 ? data.time : data.values.map((row) => row[index]);
@@ -37,4 +38,21 @@ export function moveInArray<T>(arr: readonly T[], item: T, direction: -1 | 1): T
   const next = [...arr];
   [next[i], next[j]] = [next[j], next[i]];
   return next;
+}
+
+/** A recorded column pick list, trusted only where it still names the column it was
+ *  recorded for. A CSV text column (a channel past the sheet's real ones, see
+ *  useGroupableActive) is found by position, and its position moves when the sheet's
+ *  text columns do, so it is kept only when its recorded LABEL is still the label at
+ *  that index. A record without labels (written before text columns could be picked)
+ *  can only name real channels. Anything else falls back, never to another column. */
+export function seedPicks(
+  recorded: unknown, labels: unknown, fallback: number[], grouped: Dataset | null, real: Dataset | null,
+): number[] {
+  const picks = seedNumbers(recorded, fallback);
+  if (!grouped || !real) return picks;
+  const width = real.data.labels.length;
+  const names = Array.isArray(labels) ? labels : null;
+  const ok = picks.every((pick, i) => pick < width || (names?.[i] === grouped.data.labels[pick] && pick < grouped.data.labels.length));
+  return ok ? picks : fallback;
 }

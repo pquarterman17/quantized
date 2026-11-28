@@ -26,6 +26,7 @@ import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import type { ToolResultBook } from "../resultbook/useToolResultBook";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
+import { useGroupableActive } from "../useGroupableActive";
 import { useVariabilityResultBridge } from "./useVariabilityResultBridge";
 
 export interface VariabilityColumn {
@@ -109,17 +110,20 @@ function firstContinuous(active: ReturnType<typeof useActiveDataset>, avoid: num
 
 export function useVariability(): VariabilityState {
   const active = useActiveDataset();
+  // The sheet's CSV text columns join the channels as group columns (see useGroupableActive); the
+  // defaults, the saved result and its fingerprint stay on the real sheet.
+  const grouped = useGroupableActive();
   const setStatus = useApp((s) => s.setStatus);
   const [reportBusy, setReportBusy] = useState(false);
 
   const columns = useMemo<VariabilityColumn[]>(() => {
-    if (!active) return [];
-    const xName = String(active.data.metadata?.["x_column_name"] ?? "x");
+    if (!grouped) return [];
+    const xName = String(grouped.data.metadata?.["x_column_name"] ?? "x");
     return [
       { index: -1, label: xName },
-      ...active.data.labels.map((lab, i) => ({ index: i, label: lab })),
+      ...grouped.data.labels.map((lab, i) => ({ index: i, label: lab })),
     ];
-  }, [active]);
+  }, [grouped]);
 
   const [factorACol, setFactorACol] = useState<number>(() => firstCategorical(active, []) ?? 0);
   const [factorBCol, setFactorBCol] = useState<number>(() =>
@@ -140,7 +144,7 @@ export function useVariability(): VariabilityState {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active?.id]);
   // A column added/removed under a pick follows it by label (../useFollowColumnPicks).
-  useFollowColumnPicks(active, (follow) => {
+  useFollowColumnPicks(grouped, (follow) => {
     const a = follow(factorACol) ?? firstCategorical(active, []) ?? 0;
     const b = follow(factorBCol) ?? secondCategorical(active, a);
     const r = follow(responseCol) ?? firstContinuous(active, [a, b]);
@@ -153,7 +157,7 @@ export function useVariability(): VariabilityState {
   // analysis view plus the original-row map the jittered points need
   // (`lib/variability.buildNestedLevels`'s `rowIds`); a lazy Origin preview
   // is refused.
-  const inputs = useAnalysisInputs({ noX: true, yKeys: [responseCol, factorACol, factorBCol], policy: ROW_POLICY.analysisView });
+  const inputs = useAnalysisInputs({ noX: true, yKeys: [responseCol, factorACol, factorBCol], policy: ROW_POLICY.analysisView, textGroups: true });
   const data = inputs.ok ? inputs.data : null;
   const rowIds = inputs.ok ? inputs.rowIds : null;
 
@@ -273,7 +277,7 @@ export function useVariability(): VariabilityState {
   }
 
   const resultBridge = useVariabilityResultBridge({
-    active, responseCol, setResponseCol, factorACol, setFactorACol, factorBCol, setFactorBCol,
+    active, grouped, responseCol, setResponseCol, factorACol, setFactorACol, factorBCol, setFactorBCol,
     responseLabel, factorALabel, factorBLabel, levels, anova, summary, varComp, varCompNote, busy,
   });
 

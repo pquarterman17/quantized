@@ -44,19 +44,23 @@ const cellText = (c: unknown): string => {
   return text.toLowerCase() === "nan" ? "" : text;
 };
 
-const cache = new WeakMap<Dataset, Dataset>();
+const cache = new WeakMap<DataStruct, DataStruct>();
 
-/** `ds` with every groupable text column appended as a categorical channel. Returns
- *  `ds` itself when there is none, and the same object for the same `ds` (so a
- *  `useMemo` / effect keyed on it does not re-run). A label that is already taken is
- *  skipped rather than duplicated. */
-export function withTextGroupChannels(ds: Dataset): Dataset {
-  const hit = cache.get(ds);
+/** `d` with every groupable text column appended as a categorical channel (the
+ *  Statistics stage's rule, kept in ONE place). Returns `d` itself when there is
+ *  none, and the same object for the same `d` (so a `useMemo` / effect keyed on it
+ *  does not re-run). A label that is already taken is skipped, which makes the
+ *  call idempotent. Works on any row view of a dataset: the text sidecar is
+ *  sliced with the rows (`sliceRowSidecars`), so the codes line up with `d`. */
+export function withTextGroupData(d: DataStruct): DataStruct {
+  const hit = cache.get(d);
   if (hit) return hit;
-  const d = ds.data;
   const used = new Set(d.labels);
   const extra = textGroupColumns(d).filter((c) => !used.has(c.label));
-  if (extra.length === 0) return ds;
+  if (extra.length === 0) {
+    cache.set(d, d);
+    return d;
+  }
   const n = d.labels.length;
   const levels: string[][] = [];
   const codes = extra.map((col) => {
@@ -76,14 +80,29 @@ export function withTextGroupChannels(ds: Dataset): Dataset {
   });
   const cat_levels: Record<number, string[]> = { ...d.cat_levels };
   levels.forEach((l, k) => { cat_levels[n + k] = l; });
-  const data: DataStruct = {
+  const out: DataStruct = {
     ...d,
     labels: [...d.labels, ...extra.map((c) => c.label)],
     units: [...d.units, ...extra.map(() => "")],
     values: d.values.map((row, i) => [...row, ...codes.map((c) => c[i])]),
     cat_levels,
   };
-  const out = { ...ds, data };
-  cache.set(ds, out);
+  cache.set(d, out);
   return out;
 }
+
+/** `ds` with every groupable text column appended as a categorical channel (see
+ *  `withTextGroupData`). Returns `ds` itself when there is none, and the same
+ *  object for the same `ds`. Only `data` changes: the id, row state, channel types
+ *  and everything else are `ds`'s own. */
+export function withTextGroupChannels(ds: Dataset): Dataset {
+  const data = withTextGroupData(ds.data);
+  if (data === ds.data) return ds;
+  const hit = datasetCache.get(ds);
+  if (hit && hit.data === data) return hit;
+  const out = { ...ds, data };
+  datasetCache.set(ds, out);
+  return out;
+}
+
+const datasetCache = new WeakMap<Dataset, Dataset>();
