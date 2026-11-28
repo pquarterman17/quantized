@@ -3,7 +3,7 @@
 
 import type { MapOpRequest } from "../../../lib/api/mapOps";
 
-export type MapOpKind = "crop" | "flip" | "rotate" | "transpose" | "level" | "arith" | "scalar" | "fft" | "fftfilter" | "imgfilter";
+export type MapOpKind = "crop" | "flip" | "rotate" | "transpose" | "level" | "arith" | "scalar" | "fft" | "fftfilter" | "imgfilter" | "wavelet2d";
 
 export const OP_OPTIONS: { value: MapOpKind; label: string }[] = [
   { value: "crop", label: "Crop to a rectangle" },
@@ -16,6 +16,7 @@ export const OP_OPTIONS: { value: MapOpKind; label: string }[] = [
   { value: "fft", label: "2-D FFT (spectrum)" },
   { value: "fftfilter", label: "2-D FFT filter" },
   { value: "imgfilter", label: "Image filter (smooth / edges)" },
+  { value: "wavelet2d", label: "2-D wavelet (denoise / smooth)" },
 ];
 
 export const ARITH_OPTIONS = [
@@ -48,6 +49,16 @@ export interface MapOpsForm {
   edgeMode: "reflect" | "nearest" | "mirror" | "wrap" | "constant";
   cval: string;
   gradient: "magnitude" | "x" | "y";
+  wtAction: "denoise" | "smooth";
+  wtWavelet: string;
+  /** "" = automatic (up to 3, as deep as the map allows). */
+  wtLevel: string;
+  wtMode: string;
+  wtThreshold: "soft" | "hard";
+  /** Denoise: absolute threshold in the map's value unit; "" = universal (noise from the finest diagonal band). */
+  wtValue: string;
+  /** Smooth: detail levels to zero, comma list ("1,2"). */
+  wtZero: string;
 }
 
 export const emptyForm = (): MapOpsForm => ({
@@ -56,6 +67,7 @@ export const emptyForm = (): MapOpsForm => ({
   fftOutput: "magnitude", fftWindow: "none", fftRemoveMean: false,
   fMode: "lowpass", cutLow: "", cutHigh: "", edgeSigma: "0",
   imgKind: "gaussian", sigma: "1", size: "3", edgeMode: "reflect", cval: "0", gradient: "magnitude",
+  wtAction: "denoise", wtWavelet: "db4", wtLevel: "", wtMode: "symmetric", wtThreshold: "soft", wtValue: "", wtZero: "1",
 });
 
 const num = (t: string): number => (t.trim() === "" ? NaN : Number(t));
@@ -112,6 +124,18 @@ export function buildRequest(f: MapOpsForm): { req: Omit<MapOpRequest, "dataset"
       }
       return { req: f.imgKind === "sobel" ? { ...common, gradient: f.gradient } : common };
     }
+    case "wavelet2d": {
+      const lv = num(f.wtLevel), tv = num(f.wtValue);
+      if (f.wtLevel.trim() !== "" && !(Number.isInteger(lv) && lv >= 1)) return { error: "Level must be a whole number of 1 or more (blank for automatic)." };
+      const base = { op: "wavelet2d" as const, wt_action: f.wtAction, wt_wavelet: f.wtWavelet, wt_mode: f.wtMode, ...(f.wtLevel.trim() === "" ? {} : { wt_level: lv }) };
+      if (f.wtAction === "smooth") {
+        const zero = f.wtZero.split(",").map((t) => t.trim()).filter((t) => t !== "");
+        if (zero.length === 0 || zero.some((t) => !Number.isInteger(Number(t)) || Number(t) < 1)) return { error: "Enter the detail levels to zero as whole numbers, like 1,2." };
+        return { req: { ...base, wt_zero: zero.join(",") } };
+      }
+      if (f.wtValue.trim() !== "" && !(tv >= 0)) return { error: "The threshold must be zero or a positive number (blank for the automatic one)." };
+      return { req: { ...base, wt_threshold: f.wtThreshold, ...(f.wtValue.trim() === "" ? {} : { wt_value: tv }) } };
+    }
   }
 }
 
@@ -128,5 +152,6 @@ export function opLabel(f: MapOpsForm, otherName?: string): string {
     case "fft": return `FFT ${f.fftOutput.replace("_", " ")}`;
     case "fftfilter": return `FFT ${f.fMode}`;
     case "imgfilter": return f.imgKind === "sobel" ? "Sobel" : f.imgKind;
+    case "wavelet2d": return f.wtAction === "denoise" ? `wavelet denoise ${f.wtWavelet}` : `wavelet smooth ${f.wtWavelet}`;
   }
 }

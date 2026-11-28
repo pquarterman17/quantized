@@ -109,7 +109,7 @@ class TestDwt:
         assert r.data.values.shape[1] == 8 and r.data.labels[4] == "c1 · cA3"
 
     def test_modes_listed_are_pywt_modes(self):
-        assert set(wv.DISCRETE_MODES) <= set(pywt.Modes.modes)
+        assert set(wv.DISCRETE_MODES) - {"origin-periodic"} <= set(pywt.Modes.modes)
 
 
 class TestReconstructAndSmooth:

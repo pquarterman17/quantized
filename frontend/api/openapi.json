@@ -14839,7 +14839,8 @@
               "scalar",
               "fft2d",
               "fft_filter",
-              "image_filter"
+              "image_filter",
+              "wavelet2d"
             ],
             "title": "Op",
             "type": "string"
@@ -14894,6 +14895,53 @@
           "window": {
             "default": "none",
             "title": "Window",
+            "type": "string"
+          },
+          "wt_action": {
+            "default": "denoise",
+            "title": "Wt Action",
+            "type": "string"
+          },
+          "wt_level": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wt Level"
+          },
+          "wt_mode": {
+            "default": "symmetric",
+            "title": "Wt Mode",
+            "type": "string"
+          },
+          "wt_threshold": {
+            "default": "soft",
+            "title": "Wt Threshold",
+            "type": "string"
+          },
+          "wt_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wt Value"
+          },
+          "wt_wavelet": {
+            "default": "db4",
+            "title": "Wt Wavelet",
+            "type": "string"
+          },
+          "wt_zero": {
+            "default": "1",
+            "title": "Wt Zero",
             "type": "string"
           },
           "x_col": {
