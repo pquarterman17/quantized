@@ -87,7 +87,7 @@ test("Y3 and Y4 axes: assign, stack, format, zoom, export, refuse and fail close
   await dlg.getByRole("textbox", { name: "Color", exact: true }).fill("#c0392b");
   await page.screenshot({ path: test.info().outputPath("y3-settings.png") });
   const before = (await state(page)).history;
-  await dlg.getByRole("button", { name: "OK" }).click();
+  await dlg.getByRole("button", { name: "Apply" }).click();
   await expect.poll(async () => (await state(page)).yAxes[0]).toMatchObject({ label: "Beta axis", lim: [0, 10], color: "#c0392b" });
   expect((await state(page)).history).toBe(before + 1);
   // Drawn on the canvas in its own colour (the draw-call recorder reads the live fillStyle).
