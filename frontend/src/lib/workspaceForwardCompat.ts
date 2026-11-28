@@ -214,7 +214,7 @@ export const STAT_PICKS: Classify<StatPicks> = {
   // Marginal + ridgeline (item 20): each such save always carries its own gated field(s), so 0.34 never reopens it as a box plot.
   marginal: G, ridgeOverlap: G, ridgeBw: G,
   // Marginal size-by column and the per-ridge scale: v0.45.0's sanitizeStatPicks keeps only the keys it lists, so it drops both.
-  ridgeEach: G, marginalSize: G, marginalColor: G,
+  ridgeEach: G, marginalSize: G, marginalColor: G, marginalSplit: G,
   // Half / split violin, paired, lollipop and stacked histogram (item 20): each new mode's save carries its own gated pick(s).
   violinSide: G, pairedCi: G, lollipopStat: G, lollipopSort: G, histStack: G,
   // Item 20 variants: v0.45.0's sanitizeStatPicks keeps only the keys it lists (measured), so each is dropped.

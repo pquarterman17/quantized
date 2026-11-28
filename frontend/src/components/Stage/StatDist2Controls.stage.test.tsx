@@ -48,7 +48,7 @@ describe("marginal controls, end to end", () => {
     render(<Toolbar />);
     await waitFor(() => expect(vi.mocked(statsMarginal).mock.calls.length).toBeGreaterThan(0));
     fireEvent.change(screen.getByLabelText("split by"), { target: { value: "2" } });
-    await waitFor(() => expect(useApp.getState().statPicks).toMatchObject({ histSplit: true }));
+    await waitFor(() => expect(useApp.getState().statPicks).toMatchObject({ marginalSplit: true }));
     await waitFor(() => expect(vi.mocked(statsMarginal).mock.calls.at(-1)![4]).toMatchObject({ group_labels: ["A", "B", "C"] }));
     fireEvent.change(screen.getByLabelText("size"), { target: { value: "3" } });
     await waitFor(() => expect(useApp.getState().statPicks.marginalSize).toBe(3));

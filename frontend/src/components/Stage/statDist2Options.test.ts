@@ -112,7 +112,7 @@ async function marginal(name: string): Promise<Hook> {
   const kind = FIX.marginal[name].route.kind;
   act(() => { s().setMode("marginal"); s().setValueCol(col("moment")); s().setHistCols([col("field")]); s().setBins("sturges"); });
   act(() => s().setDist2({ marginal: kind }));
-  if (name.startsWith("group")) { act(() => s().setGroupCol(col("lot"))); act(() => s().setDist2({ histSplit: true })); }
+  if (name.startsWith("group")) { act(() => s().setGroupCol(col("lot"))); act(() => s().setDist2({ marginalSplit: true })); }
   if (name === "groupSize" || name === "colorSize") act(() => s().setDist2({ marginalSize: col("mass") }));
   if (name === "colorSize") act(() => s().setDist2({ marginalColor: col("temp") }));
   await waitFor(() => expect(s().draw?.mode).toBe("marginal"));
@@ -140,6 +140,22 @@ describe("marginal encodings: the stage and the fixture agree", () => {
     expect(vi.mocked(statsMarginal).mock.calls.at(-1)!.slice(2)).toEqual(["histogram", "fd", {}]);
   });
 
+  it("the histogram's split is not the marginal's: switching mode never splits what the user did not split there", async () => {
+    vi.mocked(statsMarginal).mockResolvedValue(FIX.marginal.groupHistogram.response);
+    const hook = renderHook(() => useWiredStage());
+    const s = () => hook.result.current;
+    act(() => { s().setValueCol(col("moment")); s().setHistCols([col("field")]); s().setGroupCol(col("lot")); });
+    act(() => { s().setMode("histogram"); s().setDist2({ histSplit: true }); });
+    act(() => s().setMode("marginal"));
+    await waitFor(() => expect(s().draw?.mode).toBe("marginal"));
+    expect(vi.mocked(statsMarginal).mock.calls.at(-1)![4]).toEqual({}); // not split
+    expect(s().dist2).toMatchObject({ histSplit: true, marginalSplit: false });
+    act(() => s().setDist2({ marginalSplit: true })); // only the pick made here splits it
+    await waitFor(() => expect(vi.mocked(statsMarginal).mock.calls.at(-1)![4]).toHaveProperty("group"));
+    act(() => s().setDist2({ histSplit: false })); // and the histogram's pick no longer matters
+    expect(s().dist2.marginalSplit).toBe(true);
+  });
+
   it("a group split together with a colour column is refused with the reason, and nothing is posted", async () => {
     vi.mocked(statsMarginal).mockResolvedValue(FIX.marginal.groupHistogram.response);
     const hook = renderHook(() => useWiredStage());
@@ -147,7 +163,7 @@ describe("marginal encodings: the stage and the fixture agree", () => {
     act(() => { s().setMode("marginal"); s().setValueCol(col("moment")); s().setHistCols([col("field")]); s().setGroupCol(col("lot")); });
     await waitFor(() => expect(s().draw?.mode).toBe("marginal"));
     vi.mocked(statsMarginal).mockClear();
-    act(() => s().setDist2({ histSplit: true, marginalColor: col("temp") }));
+    act(() => s().setDist2({ marginalSplit: true, marginalColor: col("temp") }));
     await waitFor(() => expect(s().error).toMatch(/both colour the points/));
     expect(s().draw).toBeNull();
     expect(statsMarginal).not.toHaveBeenCalled();

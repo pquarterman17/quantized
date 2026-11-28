@@ -60,7 +60,7 @@ function makeState(overrides: Partial<StatStageState> = {}): StatStageState {
     setCdfBand: vi.fn(),
     rug: undefined,
     setRug: vi.fn(),
-    dist2: { marginal: "histogram", ridgeOverlap: 1, ridgeBw: "scott", violinSide: "half", pairedCi: false, lollipopStat: "mean", lollipopSort: "none", histStack: false, violinMarks: "none", pairedDirection: false, lollipopHoriz: false, histSplit: false, violinMean: false, violinRain: false, pairedTol: 0, histPercent: false, lollipopWhisker: "none", ridgeEach: false },
+    dist2: { marginal: "histogram", ridgeOverlap: 1, ridgeBw: "scott", violinSide: "half", pairedCi: false, lollipopStat: "mean", lollipopSort: "none", histStack: false, violinMarks: "none", pairedDirection: false, lollipopHoriz: false, histSplit: false, violinMean: false, violinRain: false, pairedTol: 0, histPercent: false, lollipopWhisker: "none", ridgeEach: false, marginalSplit: false },
     setDist2: vi.fn(),
     barStack: false,
     setBarStack: vi.fn(),

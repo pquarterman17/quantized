@@ -198,6 +198,8 @@ export interface StatPicks {
   ridgeOverlap?: number;
   ridgeBw?: string;
   ridgeEach?: boolean;
+  /** The marginal plot's strips split by the "group by" column (the histogram's own split is `histSplit`). */
+  marginalSplit?: boolean;
   marginalSize?: number;
   marginalColor?: number;
   /** Half / split violin, paired CI, lollipop and stacked histogram (item 20); each mode's save
@@ -226,7 +228,7 @@ const STAT_PICK_VALUES: Record<string, readonly unknown[]> = {
   mode: ["box", "violin", "qq", "histogram", "bar", "strip", "cdf", "marginal", "ridgeline", "sideviolin", "paired", "lollipop"], dist: DISTRIBUTIONS, bins: BIN_RULES,
   fit: [null, ...DISTRIBUTIONS], barStack: [true, false], barPercent: [true, false],
   cdfY: ["proportion", "count"], cdfBand: [true, false],
-  marginal: MARGINAL_KINDS, ridgeEach: [true, false],
+  marginal: MARGINAL_KINDS, ridgeEach: [true, false], marginalSplit: [true, false],
   violinSide: VIOLIN_SIDES, pairedCi: [true, false], lollipopStat: LOLLIPOP_STATS, lollipopSort: LOLLIPOP_SORTS, histStack: [true, false],
   violinMarks: VIOLIN_MARKS, pairedDirection: [true, false], lollipopHoriz: [true, false], histSplit: [true, false],
   violinMean: [true, false], violinRain: [true, false], histPercent: [true, false], lollipopWhisker: LOLLIPOP_WHISKERS,

@@ -209,6 +209,7 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   "StatPicks.ridgeBw": (ws) => editView(ws, (v) => { v.statPicks = { mode: "ridgeline", ridgeOverlap: 1, ridgeBw: "silverman" }; }),
   "StatPicks.ridgeEach": (ws) => editView(ws, (v) => { v.statPicks = { mode: "ridgeline", ridgeOverlap: 1.37, ridgeBw: "0.45", ridgeEach: true }; }),
   "StatPicks.marginalSize": (ws) => editView(ws, (v) => { v.statPicks = { mode: "marginal", marginal: "box", marginalSize: 3 }; }),
+  "StatPicks.marginalSplit": (ws) => editView(ws, (v) => { v.statPicks = { mode: "marginal", marginal: "box", marginalSplit: true }; }),
   "StatPicks.marginalColor": (ws) => editView(ws, (v) => { v.statPicks = { mode: "marginal", marginal: "rug", marginalColor: 2 }; }),
   "StatPicks.violinSide": (ws) => editView(ws, (v) => { v.statPicks = { mode: "sideviolin", violinSide: "split", ridgeBw: "scott" }; }),
   "StatPicks.pairedCi": (ws) => editView(ws, (v) => { v.statPicks = { mode: "paired", pairedCi: true }; }),

@@ -44,7 +44,7 @@ describe("StatDist2Controls", () => {
   });
 
   it("marginal: the bin rule only shows for histogram margins", () => {
-    render(<StatDist2Controls st={state({ dist2: { marginal: "rug", ridgeOverlap: 1, ridgeBw: "scott", violinSide: "half", pairedCi: false, lollipopStat: "mean", lollipopSort: "none", histStack: false, violinMarks: "none", pairedDirection: false, lollipopHoriz: false, histSplit: false, violinMean: false, violinRain: false, pairedTol: 0, histPercent: false, lollipopWhisker: "none", ridgeEach: false } })} />);
+    render(<StatDist2Controls st={state({ dist2: { marginal: "rug", ridgeOverlap: 1, ridgeBw: "scott", violinSide: "half", pairedCi: false, lollipopStat: "mean", lollipopSort: "none", histStack: false, violinMarks: "none", pairedDirection: false, lollipopHoriz: false, histSplit: false, violinMean: false, violinRain: false, pairedTol: 0, histPercent: false, lollipopWhisker: "none", ridgeEach: false, marginalSplit: false } })} />);
     expect(screen.queryByLabelText("bins")).toBeNull();
   });
 
@@ -89,7 +89,7 @@ describe("StatDist2Controls", () => {
     render(<StatDist2Controls st={st} />);
     fireEvent.change(screen.getByLabelText("split by"), { target: { value: "2" } });
     expect(st.setGroupCol).toHaveBeenCalledWith(2);
-    expect(st.setDist2).toHaveBeenLastCalledWith({ histSplit: true });
+    expect(st.setDist2).toHaveBeenLastCalledWith({ marginalSplit: true });
     expect((screen.getByLabelText("color") as HTMLSelectElement).value).toBe("2");
     fireEvent.change(screen.getByLabelText("color"), { target: { value: "none" } });
     expect(st.setDist2).toHaveBeenLastCalledWith({ marginalColor: undefined });

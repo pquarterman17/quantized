@@ -130,7 +130,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   const { marksMode, marks, patchMarks } = useStatMarksState(mode, params);
   const grouped = effectiveGroupCol != null;
   const splitHist = mode === "histogram" && dist2.histSplit && grouped; // a histogram series per "group by" level
-  const splitMarginal = mode === "marginal" && dist2.histSplit && grouped; // the marginal's strips split by the "group by" level
+  const splitMarginal = mode === "marginal" && dist2.marginalSplit && grouped; // the marginal's strips split by the "group by" level (its own pick, not the histogram's `histSplit`)
   const facetVar = facetVariant(mode); // the item 20 variants draw one panel per facet level too
   const facetOn = effectiveFacetCol != null && (marksMode != null || facetVar != null);
   // The marks before the bar data is known: points / summary (all that

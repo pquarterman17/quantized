@@ -56,7 +56,7 @@ export default function StatDist2Controls({ st }: { st: StatStageState }) {
   const channels = st.columns.map((c) => ({ value: String(c.index), label: c.label }));
   const xCol = marginalXCol(st.histCols, st.columns.length);
   const d = st.dist2;
-  const split = d.histSplit && st.groupCol != null;
+  const split = d.marginalSplit && st.groupCol != null;
   const numeric = [NONE, ...channels];
   const pickNumeric = (key: "marginalColor" | "marginalSize") => (e: { target: { value: string } }) =>
     st.setDist2({ [key]: e.target.value === "none" ? undefined : Number(e.target.value) });
@@ -87,7 +87,7 @@ export default function StatDist2Controls({ st }: { st: StatStageState }) {
           onChange={(e) => {
             const none = e.target.value === "none";
             if (!none) st.setGroupCol(Number(e.target.value));
-            st.setDist2({ histSplit: !none });
+            st.setDist2({ marginalSplit: !none });
           }}
         />
       </Picker>
