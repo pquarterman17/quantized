@@ -13,7 +13,7 @@ evidence stays in the appendix `ORIGIN_STUDENT_GAP_FINDINGS.md`.
 **Contracts:** `ROW_RANGE_CONTRACT.md` (items 31, 34) and `PRESET_BAR_CONTRACT.md` (item 40), both accepted 2026-11-26
 **Related:** `SCIENTIFIC_WORKBENCH_REPLACEMENT_PLAN.md` (cross-product journeys and acceptance criteria; its criteria for items 31, 34, 43, 44 and 47 are booked on those items)
 **Created:** 2026-11-25
-**Updated:** 2026-11-27 (wave 14: #1174–#1178 merged, 33 items open; pass 8 fixed; owner gate OG22 open; OG15 provisional)
+**Updated:** 2026-11-27 (wave 15: #1179 and #1181–#1185 merged, #1180 in CI; item 43 complete; item 50 booked from OG23; 33 items open; pass 9 fixed; owner gate OG22 open; OG15 provisional)
 **Baseline:** `origin/main` at `0f4b7bac0` (v0.45.0 + #1032)
 
 ---
@@ -297,6 +297,12 @@ tests it.
   - **OG12:** named ranges, cell notes and mirror columns go ahead (item 34); graphs or images in cells
     stay out.
   - **OG13:** the preset bar goes ahead (item 40); the properties navigator (item 41) is not scheduled.
+- **2026-11-27 (owner), OG23 answered (item 50):** the double-click popup is the one editor for an axis,
+  a curve and the legend, as in Origin, Igor and Prism. The right panel names what is selected with an
+  Edit… button and keeps plot-wide settings (grid, frame, template, plot title). An outside click on an
+  edited popup asks before discarding. Claude recommended the reverse (the right panel as the only editor,
+  like Excel's Format pane); the owner chose the popup. OG15 is a tool window, not an object editor, so it
+  is unaffected, but the two are worth weighing together at the OG15 revisit.
 - **2026-11-27 (owner), OG15–OG21 answered:**
   - **OG15 (provisional):** Curve Fit docks in the right column, stacked after Style, so the plot keeps its
     full height; Dock all and Reset layout do the same, and saved layouts keep their placement. The owner
@@ -322,7 +328,7 @@ tests it.
 The only place open questions for this plan live. Each names the items it
 blocks.
 
-OG1–OG21 are answered (OG1–OG14 on 2026-11-26, OG15–OG21 on 2026-11-27);
+OG1–OG21 and OG23 are answered (OG1–OG14 on 2026-11-26, OG15–OG21 and OG23 on 2026-11-27);
 the answers are under Resolved decisions, and item text that says "OGn"
 means that answer. Open:
 
@@ -340,7 +346,7 @@ means that answer. Open:
 
 ## Cross-cutting priorities
 
-The "start here" view: the open work worth doing next, ungated. Items 2, 3, 4, 5, 17, 18, 25, 28, 29, 32, 37 and 38
+The "start here" view: the open work worth doing next, ungated. Items 2, 3, 4, 5, 17, 18, 25, 28, 29, 32, 37, 38 and 43
 are complete; the others shipped their main part and keep the sub-tasks listed under each item. Wave 9 is running.
 
 | # | Item | Workstream | Why first | Model |
@@ -475,6 +481,7 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
     - [x] The same pass over wave 4 (2026-11-26, on `10091c0e3`): 15 work, 3 cosmetic, 1 wrong (an Align to peak false peak on a sloped baseline), with the earlier fixes re-verified in the app; fixed in #1082 and #1084
     - [x] The same pass over wave 5 (2026-11-26, on `f3a93abe2`, scripted by the replacement plan's journey): 38 work, 14 cosmetic, 1 wrong (Curve Fit ignored its range under the window layout's auto-pin, fixed in #1100); the cosmetics fixed in #1101, including the unreachable stack-total and X-error controls
     - [x] The same pass over wave 6 (#1089–#1101), pass 4 (2026-11-27): 0 broken, 3 wrong, 10 cosmetic. Fixed: W1 (#1116), W2, C4 and C8 (#1118), W3, C7 and C10 (#1119), C1, C2 and C3 (#1117: X leads the ternary composition only on evidence), C5 (#1121); gadget markers now sit on their curve's own Y scale (#1121)
+    - [x] Pass 9 over #1167–#1178 (2026-11-27, on `07ea3a62d`): about 55 work, 1 broken, 1 wrong, 1 cosmetic, 2 usability. Fixed in #1185: B1 (`rng("Name")` could not be typed in the formula bar or Set Column Values; adding a derived column also dropped its range link and skipped the cycle check), W1 (a one-group statistics box plot failed to export), the stale beta help, `rng` in Insert function, and range names that look like cell references
     - [ ] Not fixed from pass 4: C6 (a 10,000-bar 3-D SVG is 10 MB) and C9 (rise time estimates plateaus, labelled "estimated"). Pass 5 reuses the C / W / u labels for its own findings, listed below
     - [x] Third-pass leftovers: a CSV date column with blank cells imports as dates, one shared rule for direct import and the wizard, with 0 type changes across the corpus (#1103); export, copy and send act on the front window, maps included, and refuse with a reason when none is a figure (#1115)
     - [ ] Publication preview does not use the front-window resolver yet
@@ -510,7 +517,8 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
     - [x] Half and split violin (#1078)
     - [ ] Marginal plots with per-point colour, size or group split; ridgeline with per-ridge normalisation and facets; free numeric overlap and bandwidth
     - [x] Paired before-after, lollipop, stacked histogram (#1078)
-    - [ ] A half violin on either side with inner marks; paired lines coloured by direction; a horizontal lollipop (dot chart); a stacked histogram split by a group column
+    - [x] A half violin on either side with inner marks; paired lines coloured by direction; a horizontal lollipop (dot chart); a stacked histogram split by a group column (#1183)
+    - [ ] The #1183 variants under facets, breaks and insets; a mean marker and rain points on the violin; a "no change" tolerance on the paired direction; a 100% split histogram; whiskers on the horizontal lollipop
     - [ ] Book each type's Origin import mapping in `ORIGIN_PLOT_TYPE_PARITY_PLAN.md`
 
 21. **Ternary contour and heatmap** — composition maps on the triangle.
@@ -631,6 +639,15 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
     - [x] Presets of the wave 5 item 20 types (#1078: split violin, paired + mean ± 95% CI, sorted lollipop, stacked histogram)
     - [ ] Presets of later item 20 types as they land (the preset test caps the gallery at 20, which it now holds)
 
+50. **One editor per plot object** — the double-click popup is the only editor for an axis, a curve and the legend; the right panel names the selection, offers Edit…, and keeps plot-wide settings. *Owner-reported 2026-11-27 while testing rc1; decided as OG23.*
+    - Model: contract by **Claude Opus 5.5**; the four lanes by **Claude Sonnet 5.5**. Size L.
+    - Source: owner report (double-clicking an axis showed the Axis popup and the same fields in the right panel at once).
+    - [x] Contract: `OBJECT_EDITOR_CONTRACT.md` (decisions E1–E10, 2026-11-27)
+    - [ ] Lane A: the Axis popup holds every per-axis control the panel has, the axis title included
+    - [ ] Lane B: Plot Details becomes the whole curve editor, in tabs, over a draft
+    - [ ] Lane C: the Legend popup holds every legend control; an outside click on an edited popup asks before discarding
+    - [ ] Lane D, after A–C: the right panel drops those controls for a name and an Edit… button, and the Axes card keeps plot-wide settings with X / Y / Y2 launchers
+
 ### Tier 2 — Medium Impact
 
 40. **Preset bar on every tool** — named settings plus last-used values on each analysis workshop, generalising recipes and fit templates. *Opened 2026-11-26 (OG13).*
@@ -642,7 +659,8 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
     - [x] Slice P3: Peaks over the existing peak recipes and Baseline on the generic store, one Baseline method list (#1160)
     - [x] Slice P4: Distribution, Statistical tests, Outlier screening, Multivariate, Variability and Tabulate, each option list from one shared module (#1169, #1170)
     - [x] Slice P5, first part: Signal Processing, Time series and Hysteresis (#1176); adapters no longer validate knobs a mode hides (#1178)
-    - [ ] Slices P5–P6, rest: the remaining workshops, Export and Import presets, the Recipe Library listing; the hidden-field rule on the P5a adapters; the bar's "press Save result to run it" wording for tools that recompute on their own
+    - [x] Slices P5–P6: Export and Import presets with the `(imported)` merge rule, the Recipe Library listing (#1181); Map operations, Design of experiments, Film thickness (FFT) and the SIMS Process tab, the hidden-field rule on the P5a adapters, and the "press Save result" wording (#1184)
+    - [ ] The workshops still without a bar: Reductions' Williamson-Hall, Pawley, XRD reference pattern and Reflectivity FFT methods; the SIMS Compare, Align and Region tabs; Optical gap; Surface fit
 
 41. **Properties navigator** — one properties surface with a graph › layer › plot tree, several axes edited together, "Apply to…" other layers and graphs, and previous / next in column properties. *Not scheduled (OG13, 2026-11-26).*
     - Model: interaction design by **ChatGPT Sol high**, implementation by **ChatGPT Terra high**; Claude Sonnet 5.5 reviews the canonical-state writes. Size L.
@@ -651,12 +669,6 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
 42. **Format by parts** — copy and paste only fonts, colours, symbols or scales, and save a format as a theme by category.
     - Model: **ChatGPT Terra high** (alt Claude Sonnet 5.5). Size M.
     - Source: H2 idea 6.
-
-43. **Role grid at plot time** — choose X, Y, error and label columns when plotting, independent of column designations; a plot list showing each plot's range.
-    - Model: **ChatGPT Terra high**. Size M.
-    - Source: E (Plot Setup is Partial), H2 idea 11.
-    - [ ] Compare with Quick Plot and Graph Builder first; build only the difference
-    - [ ] Y alone with one unambiguous designated X plots directly; competing matches get an explicit role picker (replacement plan)
 
 ### Tier 3 — Nice-to-Have
 
@@ -686,6 +698,7 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
 
 ## Completed
 
+- ~~**#43 Role grid at plot time**~~ (2026-11-27, #1182) — Plot setup's role grid picks X, Y, error and label columns per plot, independent of designations; a Y alone with one designated X plots directly and competing matches get a role picker; a read-only plot list shows each plot's range. Built only the difference from Quick Plot and Graph Builder. Not done: the Set As overlay in `resolveSelectionPlot`, a per-row X-error target, role editing from the plot list, a toolbar button.
 - ~~**#8 Statistics completions**~~ (2026-11-27, #1091, #1093, #1105, #1161) — power and sample size with curves, probability calculator, row-wise t-tests with adjusted p, Steel-Dwass, ANOVA effect sizes (now also repeated-measures and Welch), Mann-Kendall and seasonal Mann-Kendall with Sen's slope, a Distribution confidence-interval table, exact binomial power and its detectable effect, and reopen entries for the CI table and the row-wise worksheet; each against scipy / statsmodels oracles. Not done: the Hirsch-Slack serial-dependence correction for seasonal Mann-Kendall and a heterogeneity-of-trend test.
 - ~~**#48 3D bars and vectors, and 3D scatter extras**~~ (2026-11-27, #1098, #1106, #1128, #1143, #1149, #1153) — 3-D bars and vectors on the shared renderer and camera, scatter colour / size / groups / error bars / wall shadows, vectors coloured by length or any column, bars coloured by a column, grouped side by side, or sized in data units; the 3-D panel starts collapsed, opens for a refusal it can fix and docks beside a wide scene. Screen and export pinned by `plot3d_kinds.json`; every field gated at v9.
 - ~~**Origin audit**~~ (2026-11-25) — install inventory, COM probe, three online-docs sweeps and the GUI pass; 627 feature rows and 16 usability ideas in the appendix.
