@@ -8,7 +8,7 @@
 
 import * as GLYPHS from "./glyphs";
 import { seriesModePatch } from "./seriesMode";
-import { plotTypePatch, plotTypeUnavailable, type PlotTypeId } from "./plotTypes";
+import { MODE_SEED, plotTypePatch, plotTypeUnavailable, type PlotTypeId } from "./plotTypes";
 import type { PlotView } from "./plotview";
 import type { StatMarks, StatMarksMode, StatPicks } from "./plotviewSanitize";
 import type { Dataset, SeriesStyle } from "./types";
@@ -17,7 +17,9 @@ export type PlotPresetId =
   | "violinPoints" | "violinMedian" | "boxPoints" | "boxMean" | "histogramFit"
   | "stackedPercent" | "lineSymbolBand" | "scatterDropLines" | "splineSymbol" | "stepLine"
   | "cdfBand" | "cdfPlain" | "cdfRug" | "marginalBox" | "marginalRug" | "ridgeOverlap"
-  | "splitViolin" | "pairedCi" | "lollipopSorted" | "stackedHist";
+  | "splitViolin" | "pairedCi" | "lollipopSorted" | "stackedHist"
+  | "violinMarks" | "raincloud" | "pairedDirection" | "dotChart" | "percentHist"
+  | "ridgeEach" | "ridgeBwWide" | "ridgeBwNarrow";
 
 export interface PlotPresetDef {
   id: PlotPresetId;
@@ -50,6 +52,14 @@ export const PLOT_PRESETS: readonly PlotPresetDef[] = [
   { id: "pairedCi", parent: "paired", label: "Paired + mean ± 95% CI", glyph: GLYPHS.presetPairedCi, description: "Each side's mean with its confidence interval." },
   { id: "lollipopSorted", parent: "lollipop", label: "Lollipop, sorted", glyph: GLYPHS.presetLollipopSorted, description: "Largest value first." },
   { id: "stackedHist", parent: "histogram", label: "Stacked histogram", glyph: GLYPHS.presetStackedHist, description: "Columns stacked on shared bins." },
+  { id: "violinMarks", parent: "sideViolin", label: "Half violin + marks", glyph: GLYPHS.presetViolinMarks, description: "Right-hand half violins with the median and quartile lines inside." },
+  { id: "raincloud", parent: "sideViolin", label: "Raincloud", glyph: GLYPHS.presetRaincloud, description: "Half violins with every raw point beside them." },
+  { id: "pairedDirection", parent: "paired", label: "Paired by direction", glyph: GLYPHS.presetPairedDirection, description: "Lines coloured by increase, decrease or no change." },
+  { id: "dotChart", parent: "lollipop", label: "Dot chart", glyph: GLYPHS.presetDotChart, description: "Categories down the Y axis, one dot per value." },
+  { id: "percentHist", parent: "histogram", label: "100% stacked histogram", glyph: GLYPHS.presetPercentHist, description: "Columns stacked on shared bins, each bin scaled to 100%." },
+  { id: "ridgeEach", parent: "ridgeline", label: "Ridgeline, each to its peak", glyph: GLYPHS.presetRidgeEach, description: "Every ridge scaled to its own tallest point." },
+  { id: "ridgeBwWide", parent: "ridgeline", label: "Ridgeline, bandwidth 0.6", glyph: GLYPHS.presetRidgeBwWide, description: "Density bandwidth factor 0.6." },
+  { id: "ridgeBwNarrow", parent: "ridgeline", label: "Ridgeline, bandwidth 0.15", glyph: GLYPHS.presetRidgeBwNarrow, description: "Density bandwidth factor 0.15." },
 ];
 
 /** The presets under each of `parents`, in declaration order. */
@@ -83,15 +93,37 @@ const STAT_PICKS: Partial<Record<PlotPresetId, Partial<StatPicks>>> = {
   pairedCi: { pairedCi: true },
   lollipopSorted: { lollipopSort: "desc" },
   stackedHist: { histStack: true },
+  violinMarks: { violinMarks: "both" },
+  raincloud: { violinRain: true },
+  pairedDirection: { pairedDirection: true },
+  dotChart: { lollipopHoriz: true },
+  percentHist: { histStack: true, histPercent: true },
+  ridgeEach: { ridgeEach: true },
+  ridgeBwWide: { ridgeBw: "0.6" },
+  ridgeBwNarrow: { ridgeBw: "0.15" },
 };
 
 /** Related options a preset does NOT set, dropped back to their default so the
  *  result never depends on which sibling preset was applied before it. */
 const RESET_PICKS: Partial<Record<PlotPresetId, readonly (keyof StatPicks)[]>> = {
-  cdfBand: ["rug"], cdfRug: ["cdfBand"], histogramFit: ["histStack", "histCols", "histSplit", "histPercent"], stackedHist: ["fit"],
+  cdfBand: ["rug"], cdfRug: ["cdfBand"],
+  histogramFit: ["histStack", "histCols", "histSplit", "histPercent"],
+  stackedHist: ["fit", "histSplit", "histPercent"], percentHist: ["fit", "histSplit"],
+  splitViolin: ["violinMarks", "violinRain"], violinMarks: ["violinSide", "violinRain"], raincloud: ["violinSide", "violinMarks"],
+  pairedCi: ["pairedDirection"], pairedDirection: ["pairedCi"],
+  lollipopSorted: ["lollipopHoriz"], dotChart: ["lollipopSort"],
+  ridgeOverlap: ["ridgeEach", "ridgeBw"], ridgeEach: ["ridgeOverlap", "ridgeBw"],
+  ridgeBwWide: ["ridgeOverlap", "ridgeEach"], ridgeBwNarrow: ["ridgeOverlap", "ridgeEach"],
 };
 const RESET_MARKS: Partial<Record<PlotPresetId, readonly (keyof StatMarks)[]>> = {
   boxPoints: ["summary", "errorBars"], boxMean: ["points"], violinPoints: ["summary"], violinMedian: ["points"],
+};
+/** Presets that stack the other plotted columns on the value column's bins. */
+export const STACKS_COLUMNS: ReadonlySet<PlotPresetId> = new Set(["stackedHist", "percentHist"]);
+const pickKeys = (o: StatPicks, keys: readonly (keyof StatPicks)[]): StatPicks => {
+  const out: Record<string, unknown> = {};
+  for (const k of keys) if (k in o) out[k] = o[k];
+  return out as StatPicks;
 };
 const without = <T extends object>(o: T, keys: readonly (keyof T)[] = []): T => {
   const next = { ...o };
@@ -144,10 +176,16 @@ export function plotPresetPatch(
     patch.seriesStyles = seriesStyles;
   }
   const picks = STAT_PICKS[id];
-  if (picks) patch.statPicks = { ...without(base.statPicks ?? view.statPicks, RESET_PICKS[id]), ...picks };
+  if (picks) {
+    const from = base.statPicks ?? view.statPicks;
+    const reset = RESET_PICKS[id];
+    // A reset key falls back to its mode's seed (the save always carries it), else is dropped.
+    const seed = reset && from.mode ? pickKeys(MODE_SEED[from.mode] ?? {}, reset) : {};
+    patch.statPicks = { ...seed, ...without(from, reset), ...picks };
+  }
   // A stacked histogram stacks columns: bin every plotted column besides the value column ("+ columns"),
   // when there is more than one to stack (with one, it is the plain histogram, and the caller says so).
-  if (id === "stackedHist" && plotted.length > 1 && patch.statPicks) {
+  if (STACKS_COLUMNS.has(id) && plotted.length > 1 && patch.statPicks) {
     const value = view.statPicks.cols?.value?.[0] ?? plotted[0];
     patch.statPicks = { ...patch.statPicks, histCols: plotted.filter((c) => c !== value) };
   }

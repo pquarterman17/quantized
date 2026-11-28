@@ -12,7 +12,7 @@ import { openAuxFigure } from "./ternaryPending";
 import { axisDraft, type AxisDraft } from "./axisDialogModel";
 import { PLOT_TYPE_COMMANDS, PLOT_TYPES, plotTypePatch, plotTypeUnavailable, type PlotTypeId } from "./plotTypes";
 import { effectiveChannels } from "./plotdata";
-import { PLOT_PRESETS, plotPresetPatch, plotPresetUnavailable, type PlotPresetId } from "./plotTypePresets";
+import { PLOT_PRESETS, STACKS_COLUMNS, plotPresetPatch, plotPresetUnavailable, type PlotPresetId } from "./plotTypePresets";
 
 /** The live view's settings for `axis`, as an editable draft. */
 export function currentAxisDraft(axis: AxisId): AxisDraft {
@@ -66,7 +66,7 @@ export function applyPlotType(id: PlotTypeId, openTernary?: () => void, presetId
   s.recordHistory(`plot type: ${label.toLowerCase()}`);
   const patch = presetId ? plotPresetPatch(presetId, s, plotted) : plotTypePatch(id, s, plotted);
   useApp.setState({ ...patch, stageTab: "plot" });
-  s.setStatus(presetId === "stackedHist" && plotted.length < 2 ? "Stacked histogram needs two or more plotted Y columns to stack; this is the plain histogram" : `plot type: ${label}`);
+  s.setStatus(presetId && STACKS_COLUMNS.has(presetId) && plotted.length < 2 ? `${label} needs two or more plotted Y columns to stack; this is the plain histogram` : `plot type: ${label}`);
 }
 
 /** Apply a variant preset: its parent type plus its fixed options, as ONE undo

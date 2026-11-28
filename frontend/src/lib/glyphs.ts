@@ -149,6 +149,14 @@ export const presetSplitViolin = "◑";
 export const presetPairedCi = "⟛";
 export const presetLollipopSorted = "⇂";
 export const presetStackedHist = "⧖";
+export const presetViolinMarks = "◐";
+export const presetRaincloud = "◒";
+export const presetPairedDirection = "⇅";
+export const presetDotChart = "⋯";
+export const presetPercentHist = "⌓";
+export const presetRidgeEach = "⌃";
+export const presetRidgeBwWide = "◠";
+export const presetRidgeBwNarrow = "⌄";
 
 // ── 2-D map toolbar (components/Stage/MapToolbarBoxPick.tsx). ──
 /** Pick a point on the map (the pixel-extraction location). */
