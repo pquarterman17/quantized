@@ -10,6 +10,11 @@ import { frontWindow, onScreen, type FigureTargetState } from "./figureTarget";
 /** Key of the classic stage's Worksheet tab, which has no window id. */
 export const STAGE_SHEET_KEY = "stage";
 
+/** Key of the window layout's Data window (the worksheet pane beside the plot), when it has its own selection. A Data
+ *  window that follows the plot mounts without a window id, so it registers under STAGE_SHEET_KEY instead: the classic
+ *  Worksheet tab is not mounted in the window layout, so the stage key can only be this pane then. */
+export const DATA_PANE_KEY = "layout-data";
+
 export const NO_FRONT_WORKSHEET = "No worksheet is in front: click a worksheet window (or open the Worksheet view) first.";
 
 export type WorksheetTarget = { kind: "worksheet"; key: string } | { kind: "none"; reason: string };
@@ -17,7 +22,10 @@ export type WorksheetTarget = { kind: "worksheet"; key: string } | { kind: "none
 export function resolveWorksheetTarget(st: FigureTargetState): WorksheetTarget {
   if (st.layoutMode !== "windows" && st.stageTab === "worksheet") return { kind: "worksheet", key: STAGE_SHEET_KEY };
   const front = st.layoutMode !== "windows" && st.stageTab !== "plot" ? null : frontWindow(onScreen(st));
-  return front?.kind === "worksheet" ? { kind: "worksheet", key: front.id } : { kind: "none", reason: NO_FRONT_WORKSHEET };
+  if (front?.kind === "worksheet") return { kind: "worksheet", key: front.id };
+  // "Plot | Data side by side": the Data window is a worksheet pane in view, though it is no plot window.
+  if (st.layoutMode === "windows" && st.windowLayout?.placements.data?.open === true) return { kind: "worksheet", key: DATA_PANE_KEY };
+  return { kind: "none", reason: NO_FRONT_WORKSHEET };
 }
 
 /** A toggle returns the reason it did nothing, or null once it has toggled. */
@@ -34,4 +42,5 @@ export function registerFormulaToggle(key: string, run: () => string | null): ()
 }
 
 /** The mounted worksheet's toggle for `key`, or null. */
-export const formulaToggleFor = (key: string): (() => string | null) | null => toggles.get(key)?.at(-1) ?? null;
+export const formulaToggleFor = (key: string): (() => string | null) | null =>
+  toggles.get(key)?.at(-1) ?? (key === DATA_PANE_KEY ? (toggles.get(STAGE_SHEET_KEY)?.at(-1) ?? null) : null);
