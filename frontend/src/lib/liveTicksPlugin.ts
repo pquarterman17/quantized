@@ -16,8 +16,7 @@ export function liveTicksPlugin(): uPlot.Plugin {
       draw: (u: uPlot) => {
         // uPlot's axis defaults name the scales: "x" on the first, "y" on the second.
         const at = (k: string) => drawnIncrement((u.axes as DrawnAxis[]).find((a) => a.scale === k)?._splits);
-        const shown = (u.axes[0] as { _values?: (string | null)[] | null })._values ?? [];
-        const xChars = Math.max(0, ...shown.map((v) => v?.length ?? 0));
+        const xChars = Math.max(0, ...((u.axes[0] as { _values?: string[] })._values ?? []).map((v) => v?.length ?? 0));
         publishLiveTickSteps({ windowId: useApp.getState().focusedWindowId, x: at("x"), y: at("y"), y2: at("y2"), ...(xChars ? { xChars } : {}) });
       },
       destroy: () => publishLiveTickSteps(null),

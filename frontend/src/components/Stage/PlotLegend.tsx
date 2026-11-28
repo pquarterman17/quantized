@@ -137,11 +137,12 @@ export default function PlotLegend({
   // Origin's habit: double-click a row's symbol to edit that plot; the label renames it inline.
   // Anywhere else on the legend falls through to the box, which opens the Legend popup.
   const onRowDoubleClick = (e: React.MouseEvent, channel: number) => {
-    const target = e.target as HTMLElement;
-    if (target.closest(".qzk-legend-toggle")) openFigureDialog({ kind: "plotDetails", channel });
-    else if (target.closest(".qzk-legend-label")) setEditing({ channel, value: seriesLabels[channel] ?? "" });
-    else return;
+    const t = e.target as HTMLElement;
+    const swatch = t.closest(".qzk-legend-toggle");
+    if (!swatch && !t.closest(".qzk-legend-label")) return;
     e.stopPropagation();
+    if (swatch) openFigureDialog({ kind: "plotDetails", channel });
+    else setEditing({ channel, value: seriesLabels[channel] ?? "" });
   };
   const commit = () => {
     if (editing) setSeriesLabel(editing.channel, editing.value);
@@ -173,7 +174,7 @@ export default function PlotLegend({
       style={legendBox.style}
       onMouseDown={legendBox.onBoxMouseDown}
       onDoubleClick={legendBox.onBoxDoubleClick}
-      title={tool === "pointer" ? "Drag to move · drag an edge or corner to resize · double-click the frame, title or padding for legend formatting" : undefined}
+      title={tool === "pointer" ? "Drag to move · drag an edge or corner to resize · double-click for legend formatting" : undefined}
       role="group"
       aria-label={legendTitle ? undefined : "Plot legend"}
       aria-labelledby={legendTitle ? titleId : undefined}
@@ -278,8 +279,8 @@ export default function PlotLegend({
             title={
               interactive
                 ? tool === "pointer"
-                  ? "Click to select · click the swatch (or Alt+click) to hide/show · double-click the swatch for plot details, the label to rename · drag onto an axis band · right-click for more"
-                  : "Click to hide/show · double-click the swatch for plot details, the label to rename · drag onto an axis band · right-click for more"
+                  ? "Click to select · click the swatch (or Alt+click) to hide/show · double-click the swatch to edit, the label to rename · drag onto an axis band · right-click for more"
+                  : "Click to hide/show · double-click the swatch to edit, the label to rename · drag onto an axis band · right-click for more"
                 : undefined
             }
             style={{
