@@ -2,6 +2,10 @@
 // real registry, the lazy host, the dialogs' own buttons, and the Preferences
 // switch.
 
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -13,10 +17,11 @@ import { useLearningDialogs } from "../../../store/learningDialogs";
 import { toast, useToasts } from "../../../store/toasts";
 import { SAMPLES } from "../../../store/learningSamples";
 import { useApp } from "../../../store/useApp";
-import shellCss from "../../../styles/shell.css?raw";
 import PrefsGeneralPane from "../PrefsGeneralPane";
 import LearningHost, { resetStartupTipForTests } from "./LearningHost";
 
+// Read from disk: vitest hands an empty string for a ?raw stylesheet import.
+const shellCss = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../../../styles/shell.css"), "utf8");
 const command = (id: string) => buildAppActions(useApp.getState).find((a) => a.id === id)!;
 
 beforeEach(() => {
@@ -69,6 +74,7 @@ describe("Sample gallery", () => {
       act(() => command("sample-gallery").run());
       const list = screen.getByRole("list", { name: "Samples" });
       const cards = within(list).getAllByRole("listitem");
+      expect(shellCss.length).toBeGreaterThan(1000);
       expect(cards).toHaveLength(6);
       for (const c of cards) expect(getComputedStyle(c).position).not.toBe("absolute");
       expect(getComputedStyle(list).gridTemplateColumns).toBe("1fr 1fr");
