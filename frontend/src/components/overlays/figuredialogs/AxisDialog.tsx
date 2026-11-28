@@ -10,7 +10,9 @@
 // an existing view field (axisDialogModel.ts), and the export carries the
 // same values (`axisFmtParam` -> `calc/axis_extras.py`), so screen and
 // export agree. Each axis tab keeps its own draft (switching X / Y / Y2 loses
-// nothing), and Apply commits every edited axis as ONE undo step.
+// nothing). Apply commits every edited axis and keeps the popup open, OK
+// applies and closes, Cancel closes and keeps what was applied; the whole popup
+// session is ONE undo step (plan item 44, figuredialogs/useApplySession.ts).
 
 import { useState, type ReactNode } from "react";
 
@@ -18,7 +20,9 @@ import type { AxisId } from "../../../store/figureDialogs";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import type { TickMode } from "../../../lib/types";
 import { editsY2Format, followYFormat, pickY2Scale, tickModeOptions } from "../../../lib/axisDialogParity";
+import ApplyButtons from "./ApplyButtons";
 import AxisTitleField from "./AxisTitleField";
+import { useApplySession } from "../../../lib/useApplySession";
 import { currentAxisDraft, followingY2Draft } from "../../../lib/figureDialogActions";
 import { axisDraftsErrors, commitAxisDrafts, type AxisDrafts } from "../../../lib/axisDraftsCommit";
 import type { AxisDraft } from "../../../lib/axisDialogModel";
@@ -121,10 +125,14 @@ export default function AxisDialog({ axis, onClose }: { axis: AxisId; onClose: (
     setDrafts((all) => (all[next] ? all : { ...all, [next]: currentAxisDraft(next) }));
     setCurrent(next);
   };
-  const apply = () => {
-    if (errors.length) return;
-    commitAxisDrafts(drafts);
-    onClose();
+  const inSession = useApplySession("edit axes");
+  /** Write every edited axis; false (and nothing written) while a draft is invalid. */
+  const apply = (): boolean => {
+    if (errors.length) return false;
+    inSession(() => commitAxisDrafts(drafts));
+    // Show what was applied: each field reads back as a fresh popup would show it.
+    setDrafts((all) => Object.fromEntries(Object.keys(all).map((a) => [a, currentAxisDraft(a as AxisId)])));
+    return true;
   };
 
   return (
@@ -149,7 +157,7 @@ export default function AxisDialog({ axis, onClose }: { axis: AxisId; onClose: (
         </div>
       )}
       <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>
-        Every field here, the scale Type included, takes effect when you press Apply. Cancel or Esc discards your changes.
+        Every field here, the scale Type included, takes effect when you press Apply or OK. Cancel or Esc closes the dialog and keeps what you already applied.
       </div>
       <h3 style={{ margin: "4px 0" }}>{AXIS_NAMES[current]} — scale</h3>
       <AxisTitleField value={draft.title} onChange={(v) => set("title", v)} axisName={AXIS_NAMES[current]} />
@@ -245,8 +253,7 @@ export default function AxisDialog({ axis, onClose }: { axis: AxisId; onClose: (
         </div>
       )}
       <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", marginTop: 4 }}>
-        <button type="button" className="qz-btn" onClick={onClose}>Cancel</button>
-        <button type="button" className="qz-btn qz-primary" onClick={apply} disabled={errors.length > 0}>Apply</button>
+        <ApplyButtons onOk={() => { if (apply()) onClose(); }} onApply={apply} onCancel={onClose} disabled={errors.length > 0} />
       </div>
     </div>
   );

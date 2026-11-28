@@ -53,7 +53,7 @@ async function openAxis(axis: Ax) {
 const field = (axis: Ax, label: string) => screen.getByRole("textbox", { name: `${NAME[axis]} ${label}` });
 const combo = (axis: Ax, label: string) => screen.getByRole("combobox", { name: `${NAME[axis]} ${label}` });
 const optionValues = (el: HTMLElement) => [...el.querySelectorAll("option")].map((o) => o.value);
-const apply = () => fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+const apply = () => fireEvent.click(screen.getByRole("button", { name: "OK" })); // OK = apply and close
 const cancel = () => fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
 beforeEach(() => {

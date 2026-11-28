@@ -129,7 +129,7 @@ describe("Axis dialog: the scale Type commits like the other fields", () => {
     useApp.setState({ yScale: "log" });
     openFigureDialog({ kind: "axis", axis: "y" });
     render(<FigureDialogs />);
-    expect(screen.getByText(/takes effect when you press Apply\. Cancel or Esc discards/)).toBeTruthy();
+    expect(screen.getByText(/takes effect when you press Apply or OK\. Cancel or Esc closes the dialog and keeps/)).toBeTruthy();
     fireEvent.change(screen.getByRole("combobox", { name: "Y axis Type" }), { target: { value: "probit" } });
     expect(useApp.getState().yScale).toBe("log");
     expect(useApp.getState().yFmt.prob).toBeUndefined();

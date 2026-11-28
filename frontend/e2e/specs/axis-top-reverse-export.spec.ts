@@ -53,7 +53,7 @@ test("Axis dialog: a reciprocal top axis and a reversed Y axis, matched on scree
   await dialog.getByRole("combobox", { name: "X axis Shows" }).selectOption("reciprocal");
   await dialog.getByRole("textbox", { name: "X axis Factor" }).fill("1000");
   await dialog.getByRole("textbox", { name: "X axis Title", exact: true }).fill(TOP_TITLE);
-  await dialog.getByRole("button", { name: "Apply" }).click();
+  await dialog.getByRole("button", { name: "OK" }).click();
   await expect(dialog).not.toBeVisible();
 
   await expect.poll(() => axisFmt(page)).toMatchObject({
@@ -67,7 +67,7 @@ test("Axis dialog: a reciprocal top axis and a reversed Y axis, matched on scree
   await expect(dialog).toBeVisible();
   await dialog.getByRole("tab", { name: "Y" }).click();
   await dialog.getByRole("checkbox", { name: "Y axis Reverse" }).check();
-  await dialog.getByRole("button", { name: "Apply" }).click();
+  await dialog.getByRole("button", { name: "OK" }).click();
   await expect(dialog).not.toBeVisible();
 
   await expect.poll(() => axisFmt(page)).toMatchObject({

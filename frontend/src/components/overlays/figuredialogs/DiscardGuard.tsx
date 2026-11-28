@@ -11,6 +11,10 @@
 // popup"), and it adds no eager JS. It is a modal on the escape stack, so Esc
 // answers the question (Keep editing) and the popup stays; Esc on the popup
 // itself stays an explicit Cancel that closes without asking.
+//
+// Plan item 44: an Apply keeps the popup open and writes the draft, so it
+// clears the mark (`markApplied`): the question covers only edits made after
+// the last Apply, and an outside click with none just closes the popup.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -35,12 +39,18 @@ export function useDiscardGuard(open: FigureDialog, close: () => void) {
     else close();
   }, [close]);
   const keepEditing = useCallback(() => setAsking(false), []);
+  /** An Apply just wrote the draft, so only edits made AFTER it are at risk (plan item 44). */
+  const markApplied = useCallback(() => {
+    edited.current = false;
+    setAsking(false);
+  }, []);
   useEscapeSurface("modal", () => { setAsking(false); return true; }, asking);
 
   return {
     asking,
     onBackdrop,
     keepEditing,
+    markApplied,
     /** Spread onto the dialog root. */
     editProps: { onInputCapture: markEdited, onChangeCapture: markEdited },
   };

@@ -61,7 +61,7 @@ async function openByDoubleClick(channel: number) {
   return screen.getByRole("dialog", { name: "Plot details" });
 }
 const tab = (name: string) => fireEvent.click(screen.getByRole("tab", { name }));
-const apply = () => fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+const apply = () => fireEvent.click(screen.getByRole("button", { name: "OK" })); // OK = apply and close
 const styles = () => useApp.getState().seriesStyles;
 const dlg = () => screen.getByRole("dialog", { name: "Plot details" });
 const select = (label: string, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } });

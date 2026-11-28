@@ -13,6 +13,7 @@ import { useApp } from "../../../store/useApp";
 import { useDialogFocus } from "../useDialogFocus";
 import AxisDialog from "./AxisDialog";
 import { DiscardBar, useDiscardGuard } from "./DiscardGuard";
+import { AppliedContext } from "../../../lib/useApplySession";
 import ColorGradientDialog from "./ColorGradientDialog";
 import GraphLayerDialog from "./GraphLayerDialog";
 import LegendDialog from "./LegendDialog";
@@ -52,6 +53,7 @@ export default function FigureDialogs() {
         {/* The fields scroll; the "Discard your changes?" bar sits below them, so it never covers a row. */}
         <div style={{ flex: "1 1 auto", minHeight: 0, overflowY: "auto" }} data-testid="figure-dialog-body">
         <h2 id={titleId}>{title}</h2>
+        <AppliedContext.Provider value={guard.markApplied}>
         {open.kind === "axis" ? <AxisDialog key={open.axis} axis={open.axis} onClose={close} />
           : open.kind === "plotDetails" ? <PlotDetailsDialog key={open.channel} channel={open.channel} onClose={close} />
           : open.kind === "plotSetup" ? <PlotSetupDialog seed={open.seed} onClose={close} />
@@ -60,6 +62,7 @@ export default function FigureDialogs() {
           : open.kind === "colorGradient" ? <ColorGradientDialog onClose={close} />
           : open.kind === "graphLayer" ? <GraphLayerDialog key={open.id} id={open.id} draft={open.draft} onClose={close} />
           : <PlotTypeGallery onClose={close} />}
+        </AppliedContext.Provider>
         </div>
         {guard.asking && <DiscardBar onKeep={guard.keepEditing} onDiscard={close} />}
       </div>

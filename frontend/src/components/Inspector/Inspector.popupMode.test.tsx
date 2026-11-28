@@ -196,7 +196,7 @@ describe("through the real entry points", () => {
     fireEvent.change(within(dlg).getByRole("textbox", { name: "Y axis From" }), { target: { value: "2" } });
     fireEvent.change(within(dlg).getByRole("textbox", { name: "Y axis To" }), { target: { value: "9" } });
     expect(st().yLim).toBeNull(); // a draft until Apply
-    fireEvent.click(within(dlg).getByRole("button", { name: "Apply" }));
+    fireEvent.click(within(dlg).getByRole("button", { name: "OK" }));
     expect(st().yLim).toEqual([2, 9]);
     expect(screen.queryByRole("dialog")).toBeNull();
   });

@@ -53,7 +53,7 @@ async function openAxis(axis: Ax) {
 const field = (axis: Ax, label: string) => screen.getByRole("textbox", { name: `${NAME[axis]} ${label}` });
 const typeIn = (axis: Ax, label: string, value: string) => fireEvent.change(field(axis, label), { target: { value } });
 const tab = (name: string) => fireEvent.click(screen.getByRole("tab", { name }));
-const apply = () => fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+const apply = () => fireEvent.click(screen.getByRole("button", { name: "OK" })); // OK = apply and close
 const pickType = (axis: Ax, value: string) => fireEvent.change(screen.getByRole("combobox", { name: `${NAME[axis]} Type` }), { target: { value } });
 const app = () => useApp.getState();
 

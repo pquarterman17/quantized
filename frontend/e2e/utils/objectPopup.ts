@@ -35,9 +35,9 @@ export async function openCurvePopup(page: Page, curveLabel: string | RegExp): P
   return dialog;
 }
 
-/** Press Apply in a popup and wait for it to close. */
+/** Press OK (apply and close) in a popup and wait for it to close. */
 export async function applyPopup(dialog: Locator): Promise<void> {
-  await dialog.getByRole("button", { name: "Apply" }).click();
+  await dialog.getByRole("button", { name: "OK" }).click();
   await expect(dialog).toBeHidden();
 }
 

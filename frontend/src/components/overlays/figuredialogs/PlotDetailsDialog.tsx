@@ -3,9 +3,10 @@
 // > Plot Details...) to edit everything the right panel's Series style card
 // holds, in tabs: Line, Symbol, Error bars, Fill and bars, Marks.
 //
-// All tabs edit ONE draft (`curve/curveDraft.ts`); Apply writes it through the
-// store's own setters as ONE undo step, Cancel / Esc change nothing, and Apply
-// with nothing edited changes nothing. Each tab takes a value and a setter, so
+// All tabs edit ONE draft (`curve/useCurveDraft.ts`); Apply writes it through
+// the store's own setters and keeps the popup open, OK applies and closes,
+// Cancel / Esc close and keep what was applied. The popup session is ONE undo
+// step (useApplySession), and Apply with nothing edited changes nothing. Each tab takes a value and a setter, so
 // a docked panel card could mount the same tab over the live setters.
 // Mounted inside the lazy `FigureDialogs` host, which owns the modal frame.
 
@@ -21,6 +22,8 @@ import MarksTab from "./curve/MarksTab";
 import SymbolTab from "./curve/SymbolTab";
 import { useCurveContext } from "./curve/useCurveContext";
 import { useCurveDraft } from "./curve/useCurveDraft";
+import ApplyButtons from "./ApplyButtons";
+import { useApplySession } from "../../../lib/useApplySession";
 
 const TABS = ["Line", "Symbol", "Error bars", "Fill and bars", "Marks"] as const;
 type Tab = (typeof TABS)[number];
@@ -31,7 +34,7 @@ export default function PlotDetailsDialog({ channel, onClose }: { channel: numbe
     return s.seriesLabels[channel] ?? ds?.data.labels[channel] ?? `Series ${channel + 1}`;
   });
   const ctx = useCurveContext(channel);
-  const { draft, initialErr, setSeriesStyle, setErrCol, reset } = useCurveDraft(channel, ctx.datasetId);
+  const { draft, initialErr, setSeriesStyle, setErrCol, reset, applied } = useCurveDraft(channel, ctx.datasetId);
   const [tab, setTab] = useState<Tab>("Line");
   const panel = useRef<HTMLDivElement | null>(null);
   const style = draft.styles[channel] ?? {};
@@ -42,9 +45,10 @@ export default function PlotDetailsDialog({ channel, onClose }: { channel: numbe
     panel.current?.querySelector<HTMLElement>("input,select,button")?.focus();
   }, []);
 
+  const inSession = useApplySession("edit curve");
   const apply = () => {
-    commitCurveDraft(channel, ctx.datasetId ?? "", draft, initialErr);
-    onClose();
+    inSession(() => commitCurveDraft(channel, ctx.datasetId ?? "", draft, initialErr));
+    applied(draft.errCol);
   };
   const props = { channel, style, setSeriesStyle, ctx };
   const aboveStyle = ctx.above !== undefined ? draft.styles[ctx.above] : undefined;
@@ -81,8 +85,7 @@ export default function PlotDetailsDialog({ channel, onClose }: { channel: numbe
           Reset style
         </button>
         <span style={{ display: "flex", gap: 6 }}>
-          <button type="button" className="qz-btn" onClick={onClose}>Cancel</button>
-          <button type="button" className="qz-btn qz-primary" onClick={apply}>Apply</button>
+          <ApplyButtons onOk={() => { apply(); onClose(); }} onApply={apply} onCancel={onClose} />
         </span>
       </div>
     </div>
