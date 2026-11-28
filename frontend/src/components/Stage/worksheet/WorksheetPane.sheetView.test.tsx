@@ -81,6 +81,18 @@ describe("Show formulas", () => {
     expect(cell(0, 2).textContent).toBe(unwrapRange(wrapped).expr);
   });
 
+  it("draws a range-limited formula's text only on the rows it covers (C2)", async () => {
+    st().addFormula("w", "Sum", "if(row() >= 1 and row() <= 2, Temp * 2, nan)");
+    render(<WorksheetPane datasetId="w" />);
+    expect(cell(2, 2).textContent).toBe("—"); // outside the range: no value
+    await pick("Show formulas");
+    expect(cell(0, 2).textContent).toBe("A * 2");
+    expect(cell(1, 2).textContent).toBe("A * 2");
+    expect(cell(2, 2).textContent).toBe("—"); // left as it is, not the expression
+    await pick("Show formulas");
+    expect(cell(0, 2).textContent).toBe("6.0000");
+  });
+
   it("is per window and not saved", async () => {
     st().addFormula("w", "Sum", "Temp + Field");
     const { unmount } = render(<WorksheetPane datasetId="w" />);

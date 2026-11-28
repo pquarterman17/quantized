@@ -15,22 +15,31 @@ import { unwrapRange } from "../../../lib/setColumnValues";
 import type { Dataset } from "../../../lib/types";
 import type { CellFormatter } from "./cellFormat";
 
+/** A formula column's text, and the 1-based rows it covers (blank bounds = the first / last row). */
+export interface FormulaText { text: string; from: number; to: number }
+
 /** Formula text by column index, for the computed columns that have an expression. */
-export function formulaTextByColumn(ds: Dataset): Record<number, string> {
+export function formulaTextByColumn(ds: Dataset): Record<number, FormulaText> {
   const base = ds.data.labels.length - (ds.formulas?.length ?? 0);
-  const out: Record<number, string> = {};
+  const out: Record<number, FormulaText> = {};
   (ds.formulas ?? []).forEach((f, i) => {
-    if (f.expr.trim() && !f.recode) out[base + i] = unwrapRange(f.expr).expr;
+    if (f.expr.trim() && !f.recode) {
+      const u = unwrapRange(f.expr);
+      out[base + i] = { text: u.expr, from: u.from === "" ? 1 : Number(u.from), to: u.to === "" ? Infinity : Number(u.to) };
+    }
   });
   return out;
 }
 
-/** `fmtOf` with each formula column drawn as its text. */
-export function withFormulaText(fmtOf: (col: number) => CellFormatter, text: Record<number, string> | undefined): (col: number) => CellFormatter {
+/** `fmtOf` with each formula column drawn as its text, on the rows the formula covers only: a
+ *  range-limited column keeps its own (blank) cells outside the range. */
+export function withFormulaText(fmtOf: (col: number) => CellFormatter, text: Record<number, FormulaText> | undefined): (col: number) => CellFormatter {
   if (!text) return fmtOf;
   return (col) => {
     const t = text[col];
-    return t === undefined ? fmtOf(col) : () => t;
+    if (t === undefined) return fmtOf(col);
+    const own = fmtOf(col);
+    return (v, row) => (row === undefined || (row + 1 >= t.from && row + 1 <= t.to) ? t.text : own(v, row));
   };
 }
 
@@ -38,7 +47,7 @@ export interface ShowFormulas {
   on: boolean;
   toggle: () => void;
   /** The text to draw, or undefined while the view is off. */
-  cells: Record<number, string> | undefined;
+  cells: Record<number, FormulaText> | undefined;
 }
 
 export function useShowFormulas(ds: Dataset): ShowFormulas {

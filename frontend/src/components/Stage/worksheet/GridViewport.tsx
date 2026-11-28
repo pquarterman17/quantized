@@ -38,7 +38,7 @@ import type { CellTint } from "../../../lib/worksheetRules";
 import type { CalcResult, ChannelRole, DataStruct, ModelingType } from "../../../lib/types";
 import GridHeader from "./GridHeader";
 import { gridFormatters, useFormatEpoch } from "./cellFormat";
-import { withFormulaText } from "./formulaView";
+import { withFormulaText, type FormulaText } from "./formulaView";
 import { CELL_NOTES_KEY } from "../../../lib/rowSidecars";
 import GridRow, { type GridRowCursor, type GridRowProps } from "./GridRow";
 import GridStatsFooter from "./GridStatsFooter";
@@ -129,7 +129,7 @@ export interface GridViewportProps {
   onShowCols?: (cols: number[]) => void;
   tintOf?: CellTint; // conditional format (lib/worksheetRules.ts)
   /** Show formulas (./formulaView.ts): formula columns draw this text instead of their values. */
-  formulaText?: Record<number, string>;
+  formulaText?: Record<number, FormulaText>;
 }
 
 /** What the cursor hook hands the grid: the per-cell marks and handlers

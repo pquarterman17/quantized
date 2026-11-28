@@ -16,7 +16,8 @@ const BIG = 1e4;
 const FULL = 1e15;
 const MAX_DIGITS = 15;
 
-export type CellFormatter = (v: number | undefined) => string;
+/** `row` (the source row, 0-based) is passed by the grid; only Show formulas reads it. */
+export type CellFormatter = (v: number | undefined, row?: number) => string;
 
 /** Render one numeric cell: em-dash for missing/non-finite, exponential for
  *  very large/small magnitudes, fixed otherwise — 4 decimals, or more below
