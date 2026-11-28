@@ -25849,6 +25849,15 @@
             "title": "Plateau Band",
             "type": "number"
           },
+          "plateau_method": {
+            "default": "histogram",
+            "enum": [
+              "histogram",
+              "band"
+            ],
+            "title": "Plateau Method",
+            "type": "string"
+          },
           "x": {
             "items": {
               "type": "number"
@@ -25917,6 +25926,14 @@
             "title": "N Points",
             "type": "integer"
           },
+          "plateau_method": {
+            "enum": [
+              "histogram",
+              "band"
+            ],
+            "title": "Plateau Method",
+            "type": "string"
+          },
           "plateaus_estimated": {
             "maxItems": 2,
             "minItems": 2,
@@ -25956,6 +25973,7 @@
           "low_level",
           "high_level",
           "plateaus_estimated",
+          "plateau_method",
           "n_points",
           "dropped",
           "merged_duplicates"

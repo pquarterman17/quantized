@@ -122,7 +122,7 @@ export default function CurveMeasureControls({ g }: { g: CurveMeasureState }) {
             </div>
           </div>
           <div className="qzk-helptext" style={{ marginTop: 6 }}>
-            Left empty, each level is the median of the samples in the bottom (top) 10 % of the curve&apos;s vertical range (1st to 99th percentile), so noise and spikes do not move it. A curve that never settles, such as a pure exponential, needs its levels typed in. The two percentages are fractions of the step height above the low level.
+            Left empty, the low (base) and high (top) levels are the IEEE Std 181-2011 histogram state levels: the fullest bin of the lower and of the upper half of a 100-bin histogram of Y (the median of that bin&apos;s samples), so noise, spikes and the edge itself do not move them. A trace with no clear two-level shape (a ramp, a pure exponential, an oscillation) is refused with a reason rather than guessed; type the level to measure it anyway. The two percentages (10 / 90 %, or 20 / 80 %) are fractions of the step height above the low level.
           </div>
         </>
       )}

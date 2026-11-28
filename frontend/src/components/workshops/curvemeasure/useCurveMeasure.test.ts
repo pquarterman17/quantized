@@ -85,7 +85,7 @@ describe("measureOutput", () => {
   it("lists a fall's two reference crossings in ascending X and counts rows", () => {
     const fall: StepTimeResult = {
       edge: "fall", time: 0.4, x_low: 2.2, x_high: 1.8, low_fraction: 0.1, high_fraction: 0.9,
-      low_plateau: 0, high_plateau: 1, low_level: 0.1, high_level: 0.9, plateaus_estimated: [true, true],
+      low_plateau: 0, high_plateau: 1, low_level: 0.1, high_level: 0.9, plateaus_estimated: [true, true], plateau_method: "histogram",
       n_points: 9, dropped: 0, merged_duplicates: 0,
     };
     const out = measureOutput({ mode: "step", r: fall }, LB);

@@ -18168,6 +18168,12 @@ export interface components {
              * @default 0.1
              */
             plateau_band?: number;
+            /**
+             * Plateau Method
+             * @default histogram
+             * @enum {string}
+             */
+            plateau_method?: "histogram" | "band";
             /** X */
             x: number[];
             /** Y */
@@ -18198,6 +18204,11 @@ export interface components {
             merged_duplicates: number;
             /** N Points */
             n_points: number;
+            /**
+             * Plateau Method
+             * @enum {string}
+             */
+            plateau_method: "histogram" | "band";
             /** Plateaus Estimated */
             plateaus_estimated: [
                 boolean,

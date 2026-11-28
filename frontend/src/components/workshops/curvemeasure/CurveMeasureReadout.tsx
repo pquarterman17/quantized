@@ -64,8 +64,8 @@ export default function CurveMeasureReadout({ g }: { g: CurveMeasureState }) {
           [`X at ${hi} %`, `${fmt(r.x_high)}${xu}`],
           [`level at ${lo} %`, `${fmt(r.low_level)}${yu}`],
           [`level at ${hi} %`, `${fmt(r.high_level)}${yu}`],
-          [`low plateau${r.plateaus_estimated[0] ? " (estimated)" : ""}`, `${fmt(r.low_plateau)}${yu}`],
-          [`high plateau${r.plateaus_estimated[1] ? " (estimated)" : ""}`, `${fmt(r.high_plateau)}${yu}`],
+          [`low plateau${r.plateaus_estimated[0] ? " (state level)" : " (given)"}`, `${fmt(r.low_plateau)}${yu}`],
+          [`high plateau${r.plateaus_estimated[1] ? " (state level)" : " (given)"}`, `${fmt(r.high_plateau)}${yu}`],
         ]}
       />
       {merged(r.merged_duplicates)}

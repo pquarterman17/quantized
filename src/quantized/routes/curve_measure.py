@@ -115,6 +115,7 @@ class StepTimeRequest(BaseModel):
     low_level: float | None = None
     high_level: float | None = None
     plateau_band: float = 0.1
+    plateau_method: Literal["histogram", "band"] = "histogram"
     nonfinite: NonFinite = "error"
 
 
@@ -130,6 +131,7 @@ class StepTimeResponse(BaseModel):
     low_level: float
     high_level: float
     plateaus_estimated: tuple[bool, bool]
+    plateau_method: Literal["histogram", "band"]
     n_points: int
     dropped: int
     merged_duplicates: int
@@ -149,6 +151,7 @@ def step_time_route(req: StepTimeRequest) -> StepTimeResponse:
         low_level=req.low_level,
         high_level=req.high_level,
         plateau_band=req.plateau_band,
+        plateau_method=req.plateau_method,
         nonfinite=req.nonfinite,
     )
     return StepTimeResponse.model_validate(asdict(res))
