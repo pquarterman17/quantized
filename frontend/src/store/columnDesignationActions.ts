@@ -20,6 +20,7 @@
 //  - the live plot's hidden channels and legacy `errKeys` when the dataset is
 //    the active one, so the change shows at once.
 
+import { PROTECTED_NOTICE } from "../lib/sheetProtection";
 import { SET_AS_CHOICES } from "../lib/setAsChoices";
 import { effectiveDesignations, type ColumnDesignations, type OriginDesignation } from "../lib/columnmeta";
 import { bookDefaultHiddenChannels, defaultErrKeys } from "../lib/errorbars";
@@ -97,6 +98,8 @@ export function setColumnDesignation(id: string, channel: number, designation: O
   const state = useApp.getState();
   const ds = state.datasets.find((d) => d.id === id);
   if (!ds || channel < 0 || channel >= ds.data.labels.length) return;
+  // Designations drive plotting and error binding, so a protected sheet locks them (lib/sheetProtection.ts).
+  if (ds.protectedSheet) return state.setStatus(PROTECTED_NOTICE);
   const { paired, ...patch } = applyDesignation(ds, channel, designation);
   const name = ds.data.labels[channel] ?? `column ${channel + 1}`;
   const label = SET_AS_CHOICES.find(([d]) => d === designation)?.[1] ?? designation;

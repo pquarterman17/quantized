@@ -7,6 +7,7 @@
 // 32): only the lazy Library row, workshops and menus call them, so the entry
 // chunk keeps just the remove half, which the eager dataset-removal helpers use.
 
+import { refuseProtected } from "../lib/sheetProtection";
 import { asOneEditStep } from "./undoStep";
 import { useApp } from "./useApp";
 
@@ -23,6 +24,7 @@ export function removeDatasetsPruningCollapsed(ids: readonly string[]): void {
   if (ids.length === 0) return;
   const get = useApp.getState;
   const s = get();
+  if (refuseProtected(s, ids)) return; // the whole removal, not half of it
   const drop = new Set(ids);
   const collapsed = new Set<string>();
   for (const w of s.workbooks) {

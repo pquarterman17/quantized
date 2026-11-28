@@ -9,10 +9,11 @@
 // named range as `rng("Name")`. A column with no expression (a recode, a factor, derived σ) has no
 // text to show and keeps its values.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { unwrapRange } from "../../../lib/setColumnValues";
 import type { Dataset } from "../../../lib/types";
+import { registerFormulaToggle, STAGE_SHEET_KEY } from "../../../lib/worksheetTarget";
 import type { CellFormatter } from "./cellFormat";
 
 /** Formula text by column index, for the computed columns that have an expression. */
@@ -41,8 +42,22 @@ export interface ShowFormulas {
   cells: Record<number, string> | undefined;
 }
 
-export function useShowFormulas(ds: Dataset): ShowFormulas {
+export function useShowFormulas(ds: Dataset, windowId?: string): ShowFormulas {
   const [on, setOn] = useState(false);
   const cells = useMemo(() => (on ? formulaTextByColumn(ds) : undefined), [on, ds]);
+  // The palette's Show formulas acts on the worksheet in front (lib/worksheetTarget.ts). It returns the reason, as the
+  // menu's disabled entry does, when the sheet has no formula column to show.
+  const latest = useRef({ on, ds });
+  latest.current = { on, ds };
+  useEffect(
+    () =>
+      registerFormulaToggle(windowId ?? STAGE_SHEET_KEY, () => {
+        const { on: now, ds: sheet } = latest.current;
+        if (!now && Object.keys(formulaTextByColumn(sheet)).length === 0) return `Show formulas: "${sheet.name}" has no formula columns`;
+        setOn((v) => !v);
+        return null;
+      }),
+    [windowId],
+  );
   return { on, toggle: () => setOn((v) => !v), cells };
 }

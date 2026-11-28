@@ -10,8 +10,9 @@ scan fit therefore matches what the fit workshop would produce for that model.
 
 Ranking: AICc = AIC + 2k(k+1)/(n-k-1), the small-sample correction of the
 Gaussian-log-likelihood AIC already computed by ``curve_fit`` (k = free
-parameter count). Results also carry delta-AICc (vs the best candidate) and
-Akaike weights w_i = exp(-delta_i/2) / sum_j exp(-delta_j/2) — the standard
+parameter count). Results also carry delta-AICc (vs the best converged candidate) and
+Akaike weights w_i = exp(-delta_i/2) / sum_j exp(-delta_j/2), summed over the converged
+candidates only — the standard
 "probability this is the best of the set" reading (Burnham & Anderson 2002).
 
 Default candidates: the MATLAB-parity registry (plus any plugin models) and a
@@ -254,16 +255,27 @@ def _aicc_key(entry: dict[str, Any]) -> float:
 
 
 def _rank(ok: list[dict[str, Any]]) -> None:
-    """Sort successes ascending by AICc and fill deltaAICc + Akaike weights."""
+    """Sort successes ascending by AICc; fill deltaAICc + Akaike weights over the CONVERGED ones.
+
+    The weight of model i is ``exp(-delta_i/2) / sum_j exp(-delta_j/2)`` with ``delta`` against
+    the best CONVERGED AICc and the sum over the converged models only: a fit the optimiser
+    flagged unconverged is listed and sorted by its AICc but never competes (its delta and
+    weight stay ``None``), so the weights of the rows that do compete sum to 1 and the row the
+    table marks "best" has delta 0.
+    """
     ok.sort(key=_aicc_key)
-    if not ok:
+    for e in ok:
+        e["deltaAICc"] = None
+        e["weight"] = None
+    field = [e for e in ok if e["converged"] is True]
+    if not field:
         return
-    best = _aicc_key(ok[0])
+    best = _aicc_key(field[0])
     if best == -math.inf:
         # Perfect fits (AIC -inf, e.g. an exact polynomial): deltas vs -inf are
         # ill-defined, so the perfect set shares the whole weight uniformly.
-        perfect = sum(1 for e in ok if _aicc_key(e) == -math.inf)
-        for e in ok:
+        perfect = sum(1 for e in field if _aicc_key(e) == -math.inf)
+        for e in field:
             hit = _aicc_key(e) == -math.inf
             e["deltaAICc"] = 0.0 if hit else math.inf
             e["weight"] = 1.0 / perfect if hit else 0.0
@@ -274,17 +286,17 @@ def _rank(ok: list[dict[str, Any]]) -> None:
         # AICc cannot discriminate, so share the weight uniformly like the
         # perfect-fit branch above (review 2026-07-11: inf - inf gave NaN
         # deltas and a 0.0/0.0 ZeroDivisionError -> HTTP 500).
-        for e in ok:
+        for e in field:
             e["deltaAICc"] = 0.0
-            e["weight"] = 1.0 / len(ok)
+            e["weight"] = 1.0 / len(field)
         return
     rel: list[float] = []
-    for e in ok:
+    for e in field:
         delta = _aicc_key(e) - best
         e["deltaAICc"] = delta
         rel.append(math.exp(-delta / 2.0) if math.isfinite(delta) else 0.0)
     total = sum(rel)  # >= 1: the best candidate contributes exp(0)
-    for e, r in zip(ok, rel, strict=True):
+    for e, r in zip(field, rel, strict=True):
         e["weight"] = r / total
 
 

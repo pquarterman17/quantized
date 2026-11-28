@@ -2,6 +2,7 @@
 // so the menu component never reaches into the store itself
 // (architecture.test's getState()-in-render ratchet).
 
+import { PROTECTED_NOTICE } from "../lib/sheetProtection";
 import type { ModelingType } from "../lib/types";
 import { useApp } from "./useApp";
 
@@ -10,7 +11,9 @@ import { useApp } from "./useApp";
 export function setColumnsModelingType(datasetId: string, cols: readonly number[], t: ModelingType | null): void {
   if (cols.length === 1) return useApp.getState().setChannelType(datasetId, cols[0], t);
   const s = useApp.getState();
-  if (!s.datasets.some((d) => d.id === datasetId)) return;
+  const ds = s.datasets.find((d) => d.id === datasetId);
+  if (!ds) return;
+  if (ds.protectedSheet) return s.setStatus(PROTECTED_NOTICE);
   s.recordHistory("channel type");
   useApp.setState((st) => ({
     datasets: st.datasets.map((d) => {

@@ -8,6 +8,7 @@
 import { compileFormula } from "./formula";
 import { headlessFormulaProblem } from "./formulaHeadless";
 import { derivedExport, formulaEntry } from "./pipelineDerived";
+import { sheetStepEmit } from "./pipelineSheetSteps";
 import { resampleScriptParams, sigopScriptParams } from "./transformScriptParams";
 import { channelIndexOf } from "./formulaRename";
 import { makeStep, type PipelineStep, type StepKind } from "./pipelineStep";
@@ -348,9 +349,9 @@ function stepLines(step: PipelineStep, n: number, inputIndex: number, g: Gen): E
     case "fit":
       return fitLines(n, p, step.label);
     case "ui":
-      return VIEW_ONLY.test(step.code)
+      return sheetStepEmit(step.code) ?? (VIEW_ONLY.test(step.code)
         ? { lines: [comment("display setting only; there is no data to re-run"), ...appLine(step)], changesData: false }
-        : { lines: [], changesData: true, unmapped: "this recorded action can change the data and has no quantized.api equivalent" };
+        : { lines: [], changesData: true, unmapped: "this recorded action can change the data and has no quantized.api equivalent" });
     case "expression":
       return expressionLines(step, g);
     case "transform":
