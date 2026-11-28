@@ -59,8 +59,10 @@ export function useLegendBox(tool: PlotTool) {
     document.addEventListener("mouseup", onUp);
   };
 
+  // A row's swatch and label handle their own double-click (PlotLegend) and stop it. Everything else on
+  // the legend (frame, padding, title, a row's empty space) reaches here and opens the popup.
   const onBoxDoubleClick = (e: ReactMouseEvent) => {
-    if (tool !== "pointer" || !isBoxSurface(e)) return;
+    if (tool !== "pointer" || (e.target as HTMLElement).closest("button, input, [class*='qzk-legend-resize']")) return;
     // Legend formatting (entries, corner, visibility); "Reset position" (the
     // old double-click action) lives in that dialog.
     openFigureDialog({ kind: "legend" });
