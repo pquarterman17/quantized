@@ -9,6 +9,8 @@ import { loadFormulaExtension } from "../lib/formulaExt";
 import { pipelineToPython } from "../lib/pipeline";
 import { PROTECTED_NOTICE } from "../lib/sheetProtection";
 import type { Dataset } from "../lib/types";
+import { renameLibraryNode } from "../lib/libraryRename";
+import type { LibraryNode } from "../lib/libraryHierarchy";
 import { removeDatasetsPruningCollapsed } from "./collapsedWorkbookActions";
 import { setColumnDesignation } from "./columnDesignationActions";
 import { setColumnsModelingType } from "./columnTypeActions";
@@ -133,6 +135,23 @@ describe("Library rename and delete of a protected sheet", () => {
     expect(st().datasets).toHaveLength(2);
     expect(st().trash).toHaveLength(0);
     expect(st().status).toBe(`Run 1: ${PROTECTED_NOTICE}`);
+  });
+
+  it("renaming the workbook that holds a protected sheet is allowed (one undo step), renaming the sheet is still refused", () => {
+    useApp.setState({
+      workbooks: [{ id: "wb", name: "Book" }],
+      datasets: [mk("w", "Run 1", { workbookId: "wb", protectedSheet: true }), mk("o", "Run 2", { workbookId: "wb" })],
+    });
+    // The Library's rename entry for a workbook row, then for the protected sheet inside it.
+    renameLibraryNode({ kind: "workbook", entityId: "wb" } as LibraryNode, "Renamed book");
+    expect(st().workbooks[0]!.name).toBe("Renamed book");
+    expect(st().datasets.find((d) => d.id === "w")).toMatchObject({ name: "Run 1", protectedSheet: true, data: expect.anything() });
+    expect(st().history.at(-1)?.label ?? "").toContain("rename workbook");
+    renameLibraryNode({ kind: "worksheet", entityId: "w" } as LibraryNode, "Run X");
+    expect(st().datasets.find((d) => d.id === "w")!.name).toBe("Run 1");
+    expect(st().status).toBe(`Run 1: ${PROTECTED_NOTICE}`);
+    st().undo();
+    expect(st().workbooks[0]!.name).toBe("Book");
   });
 
   it("Unprotect is one click and the sheet then renames and goes to the trash", () => {

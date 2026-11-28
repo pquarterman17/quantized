@@ -53,6 +53,8 @@ type SliceGet = () => AppState;
 export function createWorkbookActionsSlice(set: SliceSet, get: SliceGet): WorkbookActionsSlice {
   return {
     renameWorkbook: (id, name) => {
+      // Deliberately NOT refused for a workbook holding a protected sheet: a workbook rename changes no sheet's data,
+      // and Origin protects a workbook separately from its sheets. Renaming or deleting the protected SHEET is refused.
       const trimmed = name.trim();
       if (!trimmed || !get().workbooks.some((w) => w.id === id && w.name !== trimmed)) return; // no-op: no undo step
       get().recordHistory("rename workbook");
