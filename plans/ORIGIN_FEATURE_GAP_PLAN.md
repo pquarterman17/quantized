@@ -13,7 +13,7 @@ evidence stays in the appendix `ORIGIN_STUDENT_GAP_FINDINGS.md`.
 **Contracts:** `ROW_RANGE_CONTRACT.md` (items 31, 34) and `PRESET_BAR_CONTRACT.md` (item 40), both accepted 2026-11-26
 **Related:** `SCIENTIFIC_WORKBENCH_REPLACEMENT_PLAN.md` (cross-product journeys and acceptance criteria; its criteria for items 31, 34, 43, 44 and 47 are booked on those items)
 **Created:** 2026-11-25
-**Updated:** 2026-11-28 (wave 16: #1186–#1220 merged, main green; items 7, 10, 11, 12, 13, 21, 23, 33, 35, 40, 42, 45 and 50 complete; 20 items open; acceptance pass 12 and lanes for items 20, 22, 31 and 34 running; owner gate OG22 open; OG15 and OG23 to revisit)
+**Updated:** 2026-11-28 (wave 16: #1186–#1220 merged, main green; items 7, 10, 11, 12, 13, 21, 23, 24, 33, 35, 40, 42, 45 and 50 complete; 19 items open; acceptance pass 12 and lanes for items 20, 22, 31 and 34 running; owner gate OG22 open; OG15 and OG23 to revisit)
 **Baseline:** `origin/main` at `0f4b7bac0` (v0.45.0 + #1032)
 
 ---
@@ -354,7 +354,7 @@ means that answer. Open:
 
 ## Cross-cutting priorities
 
-The "start here" view: the open work worth doing next, ungated. Items 2, 3, 4, 5, 7, 10, 11, 12, 13, 17, 18, 21, 23, 25, 28, 29, 32, 33, 35, 37, 38, 40, 42, 43, 45 and 50
+The "start here" view: the open work worth doing next, ungated. Items 2, 3, 4, 5, 7, 10, 11, 12, 13, 17, 18, 21, 23, 24, 25, 28, 29, 32, 33, 35, 37, 38, 40, 42, 43, 45 and 50
 are complete; the others shipped their main part and keep the sub-tasks listed under each item.
 
 | # | Item | Workstream | Why first | Model |
@@ -500,15 +500,6 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
     - [x] Scrolling on probability axes (in quantiles) and Y3..Y8; a typed legend kept on its slot through a group step (#1217)
     - [ ] The box filter on turned and multi-panel plots
 
-24. **Plot Details residue** — text or letter symbols, subset centroid with hull or ellipse, subgroup increments, equal-aspect XY layers, total labels on stacks, anchor ticks, XY errors drawn as rectangles.
-    - Model: **Claude Sonnet 5.5**. Size M.
-    - Source: G, H1.
-    - [x] Text or letter symbols, equal-aspect XY axes, XY error rectangles, stack totals (#1081; all opt-in)
-    - [x] Group centroid, convex hull, and a data or mean confidence ellipse for grouped scatter (#1109; gated at v9)
-    - [x] Text symbols from a column, incremental letters or source-row numbers, and the legend swatch showing the text symbol, screen and export (#1156)
-    - [x] Anchor ticks (linear axes, one tick rule for screen and export, gated at v9) and a subgroup size in the style cycle (#1156)
-    - [x] Per-point text symbols on grouped, encoded, per-series-X and facet views and in graph templates (by name); the subgroup size kept through Vary dash & marker for the session (#1217). A facet grid split by a group or an encoding, or greying excluded rows, refuses with a note
-
 ### Tier 3 — Nice-to-Have
 
 26. ~~**EMF export and printing**~~ **Not planned** — closed 2026-11-26 (owner, OG9): PDF and SVG export are enough; current Office inserts SVG as vectors.
@@ -612,6 +603,7 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
 
 ## Completed
 
+- ~~**#24 Plot Details residue**~~ (2026-11-28, #1154, #1156, #1217 and earlier) — per-point text symbols on grouped, encoded, per-series-X and facet views and in graph templates, the subgroup size kept through Vary dash & marker, and the rest of the Plot Details residue. A facet grid split by a group or an encoding, or greying excluded rows, refuses text symbols with a note.
 - ~~**#12 Fit residue**~~ (2026-11-28, #1180, #1193, #1208, #1215, #1219) — a guided standard-curve tool; rank all models by category (AIC, AICc, BIC, adjusted R², reduced χ², Akaike weights over converged models); one model per dataset in Global Fit with shared parameters; a per-pixel fit through a map stack as a job, with parameter, error, χ² and converged maps against per-pixel `curve_fit`. The Pulse family was already present. Not done: map-stack fits are registry models only, unweighted and sequential (~8 ms per pixel).
 - ~~**#42 Format by parts**~~ (2026-11-28, #1211, #1216) — Paste format (choose parts) applies only the ticked parts as one undo step; every format field belongs to one part, checked by the type system; themes are graph templates holding a subset of parts. Not done: legend and plot-title fonts have no store field; Paste format to graphs pastes whole.
 - ~~**#45 Learning aids**~~ (2026-11-28, #1218) — Help › Recent hints (the last 50 status lines and toasts, in memory), a Sample gallery of six generated graphs with their worksheets, and an optional Tip of the day (off by default; every tip's menu path is checked against the real menus).
