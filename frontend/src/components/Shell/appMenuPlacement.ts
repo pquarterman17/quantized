@@ -79,6 +79,7 @@ export const PLACEMENT: Readonly<Record<string, Placement>> = {
   "graph-template-apply-many": { section: "Templates & format" },
   "copy-format": { section: "Templates & format" },
   "paste-format": { section: "Templates & format" },
+  "paste-format-parts": { section: "Templates & format" },
   "paste-format-many": { section: "Templates & format" },
   // Analyze: instrument-domain items sit with their domain, not under "Transform & signal" (N5).
   "reductions-fft": { section: "XRD & reflectivity" },
@@ -165,7 +166,7 @@ export const FLYOUT_GROUPS: Readonly<Record<string, readonly (readonly string[])
   "Plot/Create": [["function-plot", "contour-scattered", "plot-selected-together", "panel-row", "panel-column", "panel-grid", "panel-overlay"]],
   "Plot/Templates & format": [
     ["graph-template-save", "graph-template-apply", "graph-template-default", "graph-template-apply-many"],
-    ["copy-format", "paste-format", "paste-format-many"],
+    ["copy-format", "paste-format", "paste-format-parts", "paste-format-many"],
   ],
 };
 

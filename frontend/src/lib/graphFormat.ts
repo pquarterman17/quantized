@@ -18,6 +18,7 @@ import type { SeriesStyle } from "./seriesStyleTypes";
 import { sanitizeSeriesRamp, type SeriesRamp } from "./seriesRamp";
 import { cleanLineStyle, validLength } from "./lineStyleSanitize";
 import { cleanSymbols, validAlpha, validEvery, validText, validTextSize } from "./symbolSanitize";
+import { sanitizeExtras, type FormatExtras } from "./graphFormatExtras";
 import { captureMultiY, multiYPatch, sanitizeMultiY, type GraphFormatMultiY } from "./graphFormatMultiY";
 import { sanitizeAxisExtras, type AxisFormat, type AxisScale } from "./types";
 
@@ -42,6 +43,9 @@ export interface GraphFormat extends GraphFormatFields, GraphFormatMultiY {
   /** The graph's colour gradient (gap audit 4 G1): null clears the target's;
    *  absent (a format saved before gradients existed) leaves it as it is. */
   seriesRamp?: SeriesRamp | null;
+  /** Limits, the legend's free placement and the page background (`lib/graphFormatExtras.ts`): only a
+   *  paste or theme that ticks their part applies them. Absent = never captured. */
+  extras?: FormatExtras;
 }
 
 /** Strip the fields of a series style that name a dataset CHANNEL
@@ -184,6 +188,7 @@ export function sanitizeGraphFormat(v: unknown): GraphFormat | null {
       : {},
     series: o.series.map((s) => (typeof s === "object" && s !== null ? portableStyle(s as SeriesStyle) : null)),
     ...(o.seriesRamp === undefined ? {} : { seriesRamp: sanitizeSeriesRamp(o.seriesRamp) }),
+    ...(o.extras === undefined ? {} : { extras: sanitizeExtras(o.extras) }),
     ...sanitizeMultiY(o, isFmt),
   };
 }
