@@ -85,15 +85,32 @@ describe("Manage presets on the Resample bar", () => {
     expect(within(select()).getByRole("option", { name: "Dense" })).toBeTruthy();
   });
 
-  it("a clash is renamed '(imported)' and the status says so; nothing is overwritten", async () => {
+  it("a DIFFERENT preset under a taken name is renamed '(imported)' and the status says so; nothing is overwritten", async () => {
     render(<ResamplePanel />);
     await screen.findByRole("region", { name: "Resample presets" });
     await savePresetNamed("77", "Dense");
     await openManager();
-    chooseFile(JSON.stringify({ kind: "qz-presets", version: 1, presets: [{ workshop: "resample", name: "Dense", schema: 1, settings: JSON.parse(localStorage.getItem(PRESETS_KEY)!).presets[0].settings }] }));
+    chooseFile(JSON.stringify({ kind: "qz-presets", version: 1, presets: [{ workshop: "resample", name: "Dense", schema: 1, settings: { ...JSON.parse(localStorage.getItem(PRESETS_KEY)!).presets[0].settings, nPoints: "78" } }] }));
     await screen.findByText(/Renamed to avoid a clash: 'Dense' to 'Dense \(imported\)'/);
     expect(within(select()).getByRole("option", { name: "Dense" })).toBeTruthy();
     expect(within(select()).getByRole("option", { name: "Dense (imported)" })).toBeTruthy();
+  });
+
+  it("importing the same file again adds nothing and names the preset as already present (acceptance 10 U2)", async () => {
+    render(<ResamplePanel />);
+    await screen.findByRole("region", { name: "Resample presets" });
+    await savePresetNamed("77", "Dense");
+    await openManager();
+    press("Export Resample presets");
+    await screen.findByText("Exported 1 preset");
+    const text = await exported();
+    for (let i = 0; i < 3; i++) {
+      chooseFile(text);
+      await screen.findByText(/Imported 0 presets, 0 locked.*1 skipped.*'Dense' \(resample\): already present as 'Dense'/s);
+    }
+    const options = within(select()).getAllByRole("option").map((o) => o.textContent);
+    expect(options.filter((o) => o?.startsWith("Dense"))).toEqual(["Dense"]); // no "(imported)", "(imported 2)"
+    expect(JSON.parse(localStorage.getItem(PRESETS_KEY)!).presets).toHaveLength(1);
   });
 
   it("a malformed file imports nothing and says why", async () => {

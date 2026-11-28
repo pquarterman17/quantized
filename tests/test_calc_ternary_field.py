@@ -82,9 +82,57 @@ class TestSurface:
         # Heat cells never carry a value from outside the hull.
         cells, zc = heat_cells(surf, 30)
         assert np.isfinite(zc).all()
-        centroids = cells.mean(axis=1)
-        assert np.isfinite(surf(centroids[:, 0], centroids[:, 1])).all()
         assert zc.min() >= surf.z.min() - 1e-12 and zc.max() <= surf.z.max() + 1e-12
+
+    def test_heat_cells_cover_the_whole_hull_not_a_staircase(self) -> None:
+        """Every cell that shares area with the hull is kept: the cells, once
+        clipped to the hull, tile its full area (a centroid test would not)."""
+        from quantized.calc.ternary_hull_clip import clip_to_hull
+
+        x, y = ternary_xy(_comps(25))
+        surf = TernarySurface(x, y, x + y)
+        hull = surf.hull_xy
+        area = 0.5 * abs(np.dot(hull[:, 0], np.roll(hull[:, 1], -1)) - np.dot(hull[:, 1], np.roll(hull[:, 0], -1)))  # noqa: E501
+        cells, _ = heat_cells(surf, 60)
+        covered = 0.0
+        for c in cells:
+            p = clip_to_hull(c, hull)
+            if len(p):
+                covered += 0.5 * abs(np.dot(p[:, 0], np.roll(p[:, 1], -1)) - np.dot(p[:, 1], np.roll(p[:, 0], -1)))  # noqa: E501
+        assert covered == pytest.approx(area, rel=1e-9)
+
+    def test_interior_cell_values_are_unchanged(self) -> None:
+        """A cell whose centroid is inside the hull keeps the value at its
+        centroid; only the extra edge cells are new, valued inside the hull."""
+        x, y = ternary_xy(_comps(25))
+        surf = TernarySurface(x, y, 2.0 * x + 3.0 * y + 1.0)
+        cells, zc = heat_cells(surf, 40)
+        cen = cells.mean(axis=1)
+        at_centroid = surf(cen[:, 0], cen[:, 1])
+        inside = np.isfinite(at_centroid)
+        np.testing.assert_allclose(zc[inside], at_centroid[inside], rtol=0, atol=1e-12)
+        assert (~inside).sum() > 0  # the old staircase omitted exactly these
+        # The surface is linear here, so an edge cell's value is the plane at the
+        # centroid of its part inside the hull -- check one by hand.
+        from quantized.calc.ternary_hull_clip import clip_to_hull
+
+        n = int(np.flatnonzero(~inside)[0])
+        part = clip_to_hull(cells[n], surf.hull_xy)
+        px, py = part[:, 0].mean(), part[:, 1].mean()
+        assert zc[n] == pytest.approx(2.0 * px + 3.0 * py + 1.0, abs=1e-9)
+
+    def test_a_cell_outside_the_hull_is_left_out(self) -> None:
+        from quantized.calc.ternary_hull_clip import overlaps_hull
+
+        hull = np.array([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]])
+        tris = np.array([
+            [[0.1, 0.1], [0.2, 0.1], [0.1, 0.2]],  # inside
+            [[0.9, 0.9], [1.0, 0.9], [0.9, 1.0]],  # outside
+            [[0.4, 0.4], [0.8, 0.4], [0.4, 0.8]],  # straddles the hypotenuse
+            [[1.0, 0.0], [1.5, 0.0], [1.0, 0.5]],  # touches a vertex only
+            [[0.1, 0.1], [0.1, 0.2], [0.2, 0.1]],  # inside, clockwise
+        ])
+        assert overlaps_hull(tris, hull).tolist() == [True, False, True, False, True]
 
     def test_coincident_points_merge_to_their_mean(self) -> None:
         pts = np.array([[0.2, 0.3, 0.5], [0.2, 0.3, 0.5], [0.6, 0.2, 0.2], [0.1, 0.1, 0.8]])
