@@ -14,9 +14,11 @@
 import { useState, type ReactNode } from "react";
 
 import type { AxisId } from "../../../store/figureDialogs";
-import { useApp } from "../../../store/useApp";
+import { useActiveDataset, useApp } from "../../../store/useApp";
 import type { TickMode } from "../../../lib/types";
-import { commitAxisDraft, currentAxisDraft } from "../../../lib/figureDialogActions";
+import { editsY2Format, followYFormat, tickModeOptions } from "../../../lib/axisDialogParity";
+import AxisTitleField from "./AxisTitleField";
+import { commitAxisDraft, currentAxisDraft, followingY2Draft } from "../../../lib/figureDialogActions";
 import { axisDraftErrors, otherAxisKind, type AxisDraft } from "../../../lib/axisDialogModel";
 import { exchangeAxisClash } from "../../../lib/exchangeXY";
 
@@ -80,8 +82,11 @@ export default function AxisDialog({ axis, onClose }: { axis: AxisId; onClose: (
   const other = useApp((s) => otherAxisKind(s, current));
   const exchanged = useApp((s) => s.exchangeXY);
   const errors = [...axisDraftErrors(draft, current, other), ...[exchangeAxisClash(exchanged, current, draft)].filter(Boolean)];
-  const set = <K extends keyof AxisDraft>(k: K, v: AxisDraft[K]) => setDraft((d) => ({ ...d, [k]: v }));
-  const text = (k: Exclude<keyof AxisDraft, "reverse" | "equal">, label: string, placeholder = "auto") => (
+  const metadata = useActiveDataset()?.data.metadata;
+  // Editing any tick-format field gives Y2 a format of its own (it stops following Y).
+  const set = <K extends keyof AxisDraft>(k: K, v: AxisDraft[K]) =>
+    setDraft((d) => ({ ...d, [k]: v, ...(current === "y2" && editsY2Format(k, v) ? { inheritFmt: false } : {}) }));
+  const text = (k: Exclude<keyof AxisDraft, "reverse" | "equal" | "sameAsY" | "inheritFmt">, label: string, placeholder = "auto") => (
     <Row label={label}>
       <input
         className="qz-input qz-num"
@@ -108,6 +113,12 @@ export default function AxisDialog({ axis, onClose }: { axis: AxisId; onClose: (
       </select>
     </Row>
   );
+  const pickScale = (v: string) =>
+    setDraft((d) =>
+      v === "same"
+        ? { ...d, sameAsY: true, scale: followingY2Draft().scale }
+        : { ...d, sameAsY: false, scale: v as AxisDraft["scale"], ...(current === "y2" ? { inheritFmt: false } : {}) },
+    );
   const switchAxis = (next: AxisId) => {
     setCurrent(next);
     setDraft(currentAxisDraft(next));
@@ -143,7 +154,12 @@ export default function AxisDialog({ axis, onClose }: { axis: AxisId; onClose: (
         Every field here, the scale Type included, takes effect when you press Apply. Cancel or Esc discards your changes.
       </div>
       <h3 style={{ margin: "4px 0" }}>{AXIS_NAMES[current]} — scale</h3>
-      {select("scale", "Type", SCALES)}
+      <AxisTitleField value={draft.title} onChange={(v) => set("title", v)} axisName={AXIS_NAMES[current]} />
+      <Row label="Type">
+        <select className="qz-select" aria-label={`${AXIS_NAMES[current]} Type`} value={draft.sameAsY ? "same" : draft.scale} onChange={(e) => pickScale(e.target.value)}>
+          {(current === "y2" ? [{ value: "same", label: "Same as Y" }, ...SCALES] : SCALES).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      </Row>
       {text("from", "From")}
       {text("to", "To")}
       <Row label="Reverse">
@@ -184,7 +200,18 @@ export default function AxisDialog({ axis, onClose }: { axis: AxisId; onClose: (
       {text("tickAt", "Tick positions", "auto, e.g. 0, 0.5, 1")}
       {draft.tickAt.trim() !== "" && text("tickLabels", "Tick labels", "numbers, e.g. low, mid, high (\\, = a comma)")}
       <h3 style={{ margin: "4px 0" }}>Tick labels</h3>
-      {select("mode", "Number format", MODES)}
+      {current === "y2" && (
+        <Row label="Same format as Y">
+          <input
+            type="checkbox"
+            aria-label="Y2 (right) axis Same format as Y"
+            title="Y2 draws its tick labels the way Y does (ticking resets the tick format fields below to Y's)"
+            checked={draft.inheritFmt}
+            onChange={(e) => (e.target.checked ? setDraft((d) => followYFormat(d, followingY2Draft())) : set("inheritFmt", false))}
+          />
+        </Row>
+      )}
+      {select("mode", "Number format", tickModeOptions(MODES, current, metadata, draft.mode))}
       {text("digits", "Digits", "2")}
       {text("divide", "Divide by", "1")}
       {text("prefix", "Label prefix", "none, e.g. $")}
