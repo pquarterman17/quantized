@@ -25,7 +25,8 @@ import { multivariateRecipe, type MultivariateRecipe } from "./multivariateAnaly
 import { outlierScreeningRecipe, type OutlierScreeningRecipe } from "./outlierScreeningAnalysisResult";
 import { variabilityRecipe, type VariabilityRecipe } from "./variabilityAnalysisResult";
 import {
-  DOE_DESIGN_RESULT, DOE_EFFECTS_RESULT, PROFILER_RESULT, TIME_SERIES_RESULT, doeDesignQuestion, doeDesignRecipe,
+  CLUSTER_RESULT, DOE_DESIGN_RESULT, DOE_EFFECTS_RESULT, PROFILER_RESULT, TIME_SERIES_RESULT, clusterQuestion, clusterRecipe,
+  doeDesignQuestion, doeDesignRecipe,
   doeEffectsQuestion, doeEffectsRecipe, profilerQuestion, profilerRecipe, timeSeriesQuestion, timeSeriesRecipe,
 } from "./toolResultKinds";
 
@@ -90,6 +91,10 @@ function savedQuestion(result: AnalysisResult): CommitSettings | null {
     case TIME_SERIES_RESULT: {
       const recipe = timeSeriesRecipe(result);
       return recipe && timeSeriesQuestion(recipe);
+    }
+    case CLUSTER_RESULT: {
+      const recipe = clusterRecipe(result);
+      return recipe && clusterQuestion(recipe);
     }
     case DOE_DESIGN_RESULT: {
       const recipe = doeDesignRecipe(result);

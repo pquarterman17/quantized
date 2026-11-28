@@ -10,10 +10,11 @@ import { useState } from "react";
 import { NumberField } from "../../primitives/NumberField";
 import { Button } from "../../primitives";
 import Card from "../../primitives/Card";
+import type { RoiDef } from "../../../lib/roiDef";
 import type { RoiCutsState } from "./useRoiCuts";
 
-function kindLabel(kind: "rect" | "ruler" | "sector"): string {
-  return kind === "rect" ? "box" : kind === "ruler" ? "ruler" : "sector";
+function kindLabel(kind: RoiDef["kind"]): string {
+  return kind === "rect" ? "box" : kind === "ruler" ? "ruler" : kind === "polygon" ? "polygon" : "sector";
 }
 
 export default function SavedRoisCard({ roi }: { roi: RoiCutsState }) {
@@ -32,7 +33,7 @@ export default function SavedRoisCard({ roi }: { roi: RoiCutsState }) {
         <Button
           size="sm"
           disabled={!roi.canSaveCurrent}
-          title={roi.canSaveCurrent ? undefined : "Draw or type a box/ruler first"}
+          title={roi.canSaveCurrent ? undefined : "Draw or type a box, ruler or polygon first"}
           onClick={() => {
             if (roi.saveCurrentRoi(name)) setName("");
           }}

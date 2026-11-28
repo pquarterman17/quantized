@@ -140,6 +140,10 @@ export async function addDerivedColumn(
           name: step.name,
           expr: step.expr,
           derived: true,
+          // What the exported script writes as the column's unit (lib/pipelineDerived.ts); the unit
+          // belongs to THIS formula, so a later edit of it is noticed.
+          unit: added[0]?.unit ?? "",
+          unitExpr: step.expr,
           ...(step.propagate ? { propagate: true, sigmaName: added[1]?.name } : {}),
           ...(step.allowUnitMismatch ? { allowUnitMismatch: true } : {}),
         },

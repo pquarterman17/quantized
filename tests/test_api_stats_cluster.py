@@ -70,3 +70,41 @@ def test_refusals_are_422_never_500() -> None:
         "/api/stats/hierarchical", json={"x": x, "method": "ward", "metric": "correlation", "k": 2}
     )
     assert "Euclidean" in str(r.json())
+
+
+def test_kmeans_route_takes_initial_centres() -> None:
+    x = _x()
+    start = [x[0], x[10]]
+    r = client.post("/api/stats/kmeans", json={"x": x, "k": 2, "initial_centers": start})
+    assert r.status_code == 200
+    d = r.json()
+    assert d["init"] == "given" and d["n_init"] == 1 and d["counts"] == [10, 10]
+    bad = client.post("/api/stats/kmeans", json={"x": x, "k": 3, "initial_centers": start})
+    assert bad.status_code == 422 and "initial centres" in str(bad.json())
+
+
+def test_hierarchical_route_new_distances_and_ward_refusal() -> None:
+    for metric in ("sqeuclidean", "cosine"):
+        r = client.post(
+            "/api/stats/hierarchical",
+            json={"x": _x(), "metric": metric, "method": "average", "k": 2},
+        )
+        assert r.status_code == 200 and r.json()["metric"] == metric
+        assert "centroids" in r.json() and len(r.json()["wcss_by_cluster"]) == 2
+        w = client.post(
+            "/api/stats/hierarchical", json={"x": _x(), "metric": metric, "method": "ward", "k": 2}
+        )
+        assert w.status_code == 422 and "Euclidean" in str(w.json())
+
+
+def test_variable_clustering_route() -> None:
+    rng = np.random.default_rng(1)
+    a = rng.normal(size=30)
+    x = np.column_stack([a, 2 * a + rng.normal(0, 0.05, 30), rng.normal(size=30)]).tolist()
+    r = client.post("/api/stats/cluster-variables", json={"x": x, "distance": "abs", "k": 2})
+    assert r.status_code == 200
+    d = r.json()
+    assert d["labels"][0] == d["labels"][1] != d["labels"][2] and d["p"] == 3
+    assert len(d["dendrogram"]["segments"]) == 2 and len(d["correlation"]) == 3
+    for body in ({"x": x, "method": "ward", "k": 2}, {"x": x}, {"x": x[:2], "k": 2}):
+        assert client.post("/api/stats/cluster-variables", json=body).status_code == 422

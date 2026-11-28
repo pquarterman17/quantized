@@ -12,7 +12,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
-from quantized.calc import map_arith, map_fft, map_imgfilt, map_ops
+from quantized.calc import map_arith, map_fft, map_imgfilt, map_ops, map_wavelet
 from quantized.datastruct import DataStruct
 from quantized.routes._errors import CALC_ERRORS
 from quantized.routes._offloop import OffloopJSONRoute
@@ -31,6 +31,7 @@ MapOpName = Literal[
     "fft2d",
     "fft_filter",
     "image_filter",
+    "wavelet2d",
 ]
 
 
@@ -76,6 +77,14 @@ class MapOpRequest(BaseModel):
     edge_mode: str = "reflect"
     cval: float = 0.0
     gradient: str = "magnitude"
+    # wavelet2d: denoise | smooth (PyWavelets, optional extra)
+    wt_action: str = "denoise"
+    wt_wavelet: str = "db4"
+    wt_level: int | None = None
+    wt_mode: str = "symmetric"
+    wt_threshold: str = "soft"
+    wt_value: float | None = None
+    wt_zero: str = "1"
 
 
 @router.post("/apply", response_model=dict[str, Any], response_class=DataStructResponse)
@@ -115,6 +124,17 @@ def apply(req: MapOpRequest) -> Response:
                 edge_mode=req.edge_mode,
                 cval=req.cval,
                 gradient=req.gradient,
+            )
+        elif req.op == "wavelet2d":
+            out, info = map_wavelet.wavelet_map(
+                g,
+                req.wt_action,
+                wavelet=req.wt_wavelet,
+                level=req.wt_level,
+                mode=req.wt_mode,
+                threshold=req.wt_threshold,
+                value=req.wt_value,
+                zero=req.wt_zero,
             )
         elif req.op == "scalar":
             out, info = map_arith.map_scalar(g, req.arith, req.value, reverse=req.reverse)

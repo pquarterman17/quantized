@@ -9,7 +9,7 @@ import { genericBackend } from "../../../lib/presets";
 import { emptyForm, type MapOpsForm } from "./mapOpsForm";
 import {
   EDGE_MODE_OPTIONS, FFT_OUTPUT_OPTIONS, FFT_WINDOW_OPTIONS, FILTER_MODE_OPTIONS, FLIP_OPTIONS, IMAGE_FILTER_OPTIONS, LEVEL_ORDER_OPTIONS,
-  ROTATE_OPTIONS, SOBEL_OPTIONS,
+  ROTATE_OPTIONS, SOBEL_OPTIONS, WAVELET_MODE_OPTIONS, WAVELET_OPTIONS,
 } from "./mapOpsOptions";
 import { ARITH_OPTIONS, OP_OPTIONS } from "./mapOpsForm";
 import { createMapOpsAdapter, type MapOpsSettings } from "./presetAdapter";
@@ -24,7 +24,7 @@ const sample: MapOpsSettings = {
   op: "imgfilter", xmin: "1", xmax: "9", ymin: "2", ymax: "8", flipAxis: "v", degrees: "270", order: "2", restoreMean: true, arith: "div",
   interpolate: true, allowMismatch: true, scalar: "2.5", reverse: true, fftOutput: "power", fftWindow: "tukey", fftRemoveMean: true,
   fMode: "bandpass", cutLow: "0.1", cutHigh: "0.4", edgeSigma: "0.05", imgKind: "gaussian", sigma: "2", size: "5", edgeMode: "constant",
-  cval: "3", gradient: "x",
+  cval: "3", gradient: "x", wtAction: "denoise", wtWavelet: "sym4", wtLevel: "2", wtMode: "periodization", wtThreshold: "hard", wtValue: "0.5", wtZero: "1,2",
 };
 
 describePresetAdapterContract({
@@ -49,6 +49,10 @@ describe("map operations adapter specifics", () => {
     for (const o of IMAGE_FILTER_OPTIONS) expect(parse({ op: "imgfilter", imgKind: o.value }), o.value).not.toHaveProperty("error");
     for (const o of SOBEL_OPTIONS) expect(parse({ op: "imgfilter", imgKind: "sobel", gradient: o.value }), o.value).not.toHaveProperty("error");
     for (const o of EDGE_MODE_OPTIONS) expect(parse({ op: "imgfilter", edgeMode: o.value }), o.value).not.toHaveProperty("error");
+    for (const o of WAVELET_OPTIONS) expect(parse({ op: "wavelet2d", wtWavelet: o.value }), o.value).not.toHaveProperty("error");
+    for (const o of WAVELET_MODE_OPTIONS) expect(parse({ op: "wavelet2d", wtMode: o.value }), o.value).not.toHaveProperty("error");
+    expect(parse({ op: "wavelet2d", wtAction: "smooth", wtZero: "1,x" })).toMatchObject({ error: expect.stringContaining("'wtZero'") });
+    expect(parse({ op: "wavelet2d", wtAction: "denoise", wtZero: "1,x" })).not.toHaveProperty("error"); // hidden for denoise
   });
 
   it("rejects each bad value with its field named, where the operation shows it", () => {

@@ -3,6 +3,7 @@
 // to keep it under the size ceiling. THE LADDER RULE applies here: a released rung's set is FROZEN
 // (`workspaceForwardCompat.test.ts` pins it); a field gated now goes in NEW_SINCE_V045, the top rung.
 
+import { RECIPE_GATED_FEATURES } from "./workspaceRecipeCompat";
 import { GATED_METADATA_KEYS, metadataFeature } from "./workspaceMetadataGate";
 
 /** Every gated metadata feature name (`Dataset.metadata.<key>`), the metadata-key gate's entries in NEW_SINCE_V045. */
@@ -60,10 +61,16 @@ export const NEW_SINCE_V045: ReadonlySet<string> = new Set([
   // (MEASURED by reading v0.45.0's `sanitizePlotOverlays`): centroid, hull and ellipse.kind="mean" are dropped,
   // and a hull-only set becomes "no overlays" (a "mean" ellipse would silently reopen as the data ellipse).
   "PlotOverlays.groupShapes",
+  // Item 23: supplied-p-value significance marks; v0.45.0's sanitizeStatMarks keeps only its listed keys.
+  "StatMarks.sig",
   // ROW_RANGE_CONTRACT 9.1 (R2): v0.45.0's view sanitizer keeps known keys only, so it would draw every row.
   "PlotView.rowRange",
   // OG20: a saved snapshot result's recorded row range (lib/inputRowRange.ts); measured in workspaceValueGates.
   "AnalysisResult.parameters.rowRange",
+  // Nested recipe fields (item 7, workspaceRecipeCompat.ts): psdScaling, off-default Distribution CI settings.
+  ...RECIPE_GATED_FEATURES,
+  // A saved ROI of kind "polygon": v0.34.0 and v0.45.0 skip an unknown kind on open (measured in workspaceValueGates).
+  "RoiDef.kind=polygon",
   // Private dataset metadata sidecars (ROW_RANGE_CONTRACT 9.1): see GATED_METADATA_KEYS.
   ...GATED_METADATA_FEATURES,
 ])

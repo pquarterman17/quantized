@@ -92,6 +92,26 @@ describe("MapOpsPanel", () => {
     expect(useApp.getState().analysisResults.filter((r) => r.producer.id === "map-ops").length).toBeGreaterThanOrEqual(2);
   });
 
+  it("runs a 2-D wavelet denoise and smooth from the panel, and shows the missing-extra refusal", async () => {
+    render(<MapOpsPanel />);
+    fireEvent.change(screen.getByLabelText("Map operation"), { target: { value: "wavelet2d" } });
+    fireEvent.change(screen.getByLabelText("Wavelet"), { target: { value: "sym4" } });
+    fireEvent.change(screen.getByLabelText("Threshold value"), { target: { value: "0.25" } });
+    fireEvent.click(screen.getByRole("button", { name: /Apply → new dataset/ }));
+    await waitFor(() => expect(useApp.getState().datasets).toHaveLength(3));
+    expect(applyMock.mock.calls[0][0]).toMatchObject({ op: "wavelet2d", wt_action: "denoise", wt_wavelet: "sym4", wt_value: 0.25, wt_threshold: "soft" });
+    expect(useApp.getState().datasets[2].name).toBe("rsm.xrdml · wavelet denoise sym4");
+    expect(useApp.getState().analysisResults.some((r) => r.producer.id === "map-ops")).toBe(true);
+    fireEvent.change(screen.getByLabelText("Wavelet action"), { target: { value: "smooth" } });
+    fireEvent.change(screen.getByLabelText("Detail levels to zero"), { target: { value: "1,2" } });
+    applyMock.mockRejectedValueOnce(new Error("Wavelet transforms need PyWavelets, which is not installed. Install it with: pip install quantized-lab[wavelets]"));
+    fireEvent.click(screen.getByRole("button", { name: /Apply → new dataset/ }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/quantized-lab\[wavelets\]/);
+    expect(applyMock.mock.calls[1][0]).toMatchObject({ op: "wavelet2d", wt_action: "smooth", wt_zero: "1,2" });
+    expect(applyMock.mock.calls[1][0]).not.toHaveProperty("wt_value");
+    expect(useApp.getState().datasets).toHaveLength(3);
+  });
+
   it("crops with the box drawn on the map: same request as typing the snapped bounds, refusals shown", async () => {
     render(<MapOpsPanel />);
     const use = screen.getByRole("button", { name: /box drawn on the map/ });

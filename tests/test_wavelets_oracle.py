@@ -22,12 +22,11 @@ field, so the conventions below were worked out from the numbers:
   peak at scales up to 12 samples, drifting at large scales where Origin truncates the
   wavelet at the record edge. quantized's scalogram is the MAGNITUDE, and its
   Morlet is the complex ``cmorB-C``, so Origin's real Morlet is not compared.
-* **Not reproduced:** ``wtdenoise`` and ``wtsmooth``. Origin's ``wtdenoise``
-  ``sqtwolog`` output sits FURTHER from the planted clean signal (RMSE 0.31)
-  than its own noisy input (0.19), so it is not a plain universal-threshold
-  shrinkage of the DWT; ``wtsmooth``'s ``cutoff`` percentage matches neither
-  zeroing whole detail levels nor a percentile hard/soft threshold. No test
-  pins an answer that has not been explained.
+* **wtdenoise / wtsmooth:** the periodic convention, the custom percentage
+  threshold and the smooth cutoff ARE reproduced (``origin-periodic`` mode, rule
+  ``percent``, smooth ``cutoff``; see ``test_wavelets_oracle_origin.py``).
+  ``sqtwolog`` is hard thresholding with one global threshold, but its sigma is
+  not identified, so it is not pinned.
 """
 
 from __future__ import annotations

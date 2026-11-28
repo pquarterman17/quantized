@@ -9,7 +9,7 @@ import StatsInputReview from "../../analysisselection/StatsInputReview";
 import { clusterRows } from "../multivarReviewRows";
 import type { MultivarState } from "../useMultivar";
 import ClusterForms from "./ClusterForms";
-import ClusterResults from "./ClusterResults";
+import ClusterResultBook from "./ClusterResultBook";
 import { CLUSTER_TOOLS, type ClusterTool } from "./clusterRun";
 import { useCluster } from "./useCluster";
 
@@ -34,7 +34,7 @@ export default function ClusterTab({ m }: { m: MultivarState }) {
       {x.error && <div className="qzk-ds-meta" role="alert" style={{ marginTop: 6, color: "var(--warn, var(--text-faint))" }}>{x.error}</div>}
       {x.done && <div className="qzk-ds-meta" style={{ marginTop: 6 }}>{x.done}</div>}
       {x.stale && !x.busy && <div className="qzk-ds-meta" style={faint}>The data or settings changed since the last run; run again.</div>}
-      {x.result && x.meta && <ClusterResults result={x.result} meta={x.meta} />}
+      <ClusterResultBook x={x} />
     </div>
   );
 }

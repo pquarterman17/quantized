@@ -68,7 +68,15 @@ export function clusterRows(inputs: AnalysisInputs, selected: readonly number[],
     const k = o.kmeans;
     return [
       columns, { label: "Clusters (k)", value: String(k.k) }, { label: "Standardize", value: k.standardize },
-      { label: "Start", value: k.init }, { label: "Restarts", value: String(k.nInit) }, { label: "Seed", value: String(k.seed) },
+      k.start === "auto" ? { label: "Start", value: k.init } : { label: "Start", value: k.start === "rows" ? `rows ${k.startRows.trim() || "not entered"}` : "centre table" },
+      ...(k.start === "auto" ? [{ label: "Restarts", value: String(k.nInit) }, { label: "Seed", value: String(k.seed) }] : []),
+    ];
+  }
+  if (tool === "variables") {
+    const v = o.variables;
+    return [
+      columns, { label: "Linkage", value: v.method }, { label: "Distance", value: v.corr === "abs" ? "1 - |r|" : "1 - r" },
+      v.cutBy === "k" ? { label: "Cut into", value: `${v.k} clusters` } : { label: "Cut at distance", value: String(v.distance) },
     ];
   }
   const h = o.hierarchical;

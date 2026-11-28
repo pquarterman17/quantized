@@ -7,6 +7,7 @@
 
 import { compileFormula } from "./formula";
 import { headlessFormulaProblem } from "./formulaHeadless";
+import { derivedExport, formulaEntry } from "./pipelineDerived";
 import { resampleScriptParams, sigopScriptParams } from "./transformScriptParams";
 import { channelIndexOf } from "./formulaRename";
 import { makeStep, type PipelineStep, type StepKind } from "./pipelineStep";
@@ -129,7 +130,7 @@ export function sanitizeSteps(v: unknown): PipelineStep[] {
 //                  column moves, recodes, re-imports), and any code not on that
 //                  list is treated as one of them
 // Everything else (a formula outside the subset or a derived column with
-// units, the other transforms — join, merge, stack, split, dataset math, a
+// propagated errors or fit() refs, the other transforms — join, merge, stack, split, dataset math, a
 // resample onto another dataset —, paste, append, a ui step that is not
 // view-only, a step with no known kind) has no `quantized.api` equivalent and
 // becomes "NOT REPRODUCED". `qz run` (quantized/recipe_run.py) replays the
@@ -256,7 +257,8 @@ function expressionLines(step: PipelineStep, g: Gen): Emit {
   if (typeof p.name !== "string" || typeof p.expr !== "string") {
     return { lines: [], changesData: true, unmapped: "this worksheet operation has no quantized.api equivalent" };
   }
-  if (p.derived === true) return { lines: [], changesData: true, unmapped: "derived columns (units and error propagation) are evaluated only in the app" };
+  const derived = p.derived === true ? derivedExport(p) : null;
+  if (derived?.unmapped) return { lines: [], changesData: true, unmapped: `derived column: ${derived.unmapped}` };
   const problem = headlessFormulaProblem(p.expr);
   if (problem) return { lines: [], changesData: true, unmapped: `formula ${JSON.stringify(p.expr)} is evaluated only in the app: ${problem}` };
   // An edit records only the NEW name and formula (a rename loses the old
@@ -266,7 +268,9 @@ function expressionLines(step: PipelineStep, g: Gen): Emit {
     return { lines: [], changesData: true, unmapped: "an edited formula column cannot be replayed exactly (its record holds only the new name and formula)" };
   }
   const lines = g.formulas.length ? [] : [`${I}base = data  # the worksheet before its formula columns`];
-  lines.push(`${I}formulas.append((${py(p.name)}, ${py(p.expr)}))`);
+  // A derived column carries the unit the app computed for it (lib/pipelineDerived.ts).
+  if (derived?.note) lines.push(comment(derived.note));
+  lines.push(`${I}formulas.append(${formulaEntry(p.name, p.expr, derived)})`);
   g.formulas.push(p.name);
   if (typeof p.errorOf === "string") lines.push(comment(`bound as column ${p.errorOf}'s error bars in the app; the binding is not applied here`));
   lines.push(`${I}data = qz.add_formula_columns(base, formulas)`);

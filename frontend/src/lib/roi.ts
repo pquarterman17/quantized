@@ -70,13 +70,7 @@ export interface RoiSector {
   phiMax: number;
 }
 
-/** One saved, named ROI (item 8's Saved ROIs card) — a box, ruler, or
- *  sector definition, round-tripped through `store/rois.ts`. */
-export type RoiDef = { id: string; name: string } & (
-  | { kind: "rect"; rect: RoiRect }
-  | { kind: "ruler"; ruler: RoiRuler }
-  | { kind: "sector"; sector: RoiSector }
-);
+export type { RoiDef } from "./roiDef"; // the saved-ROI union lives in roiDef.ts (this file is at its size pin)
 
 /** Which compass edge of an axis-aligned px rect a point is nearest —
  *  "n"/"s" are the top/bottom (px y0/y1) faces, "e"/"w" the right/left

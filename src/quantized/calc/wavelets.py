@@ -20,9 +20,15 @@ Conventions, so the numbers can be compared with another package:
   noise, with Donoho-Johnstone's hybrid fallback to the universal threshold
   (``sqrt(2 ln n_j)`` for the level's ``n_j`` coefficients) when the level is
   too sparse for SURE to be reliable (SureShrink).
-* **CWT** is ``pywt.cwt(..., method="fft")``: L2-normalised (``1/sqrt(scale)``),
-  a scale ``s`` of a wavelet whose centre frequency is ``fc`` sits at frequency
-  ``fc / (s * dt)``. Morlet is the COMPLEX Morlet ``cmorB-C`` (``B`` bandwidth,
+* **CWT** is ``pywt.cwt(..., method="fft")``: ``W[s, n] = s**-0.5 * sum_k y[k] *
+  conj(psi((k - n + 0.5) / s))``. The scale ``s`` is in SAMPLES (``dt`` never enters
+  the coefficients, only the frequency), the wavelet is L2-normalised
+  (``1/sqrt(s)``, not the L1 ``1/s``), the record is zero beyond its ends, and the
+  integral-difference sampling puts the wavelet half a sample off the grid.
+  Pinned by hand in ``tests/test_wavelets_origin.py``; OriginPro's ``mexhat`` has the
+  same normalisation (best-fit scale 1.00 +- 0.5 percent). A wavelet whose centre
+  frequency is ``fc`` at scale ``s`` sits at frequency ``fc / (s * dt)``. Morlet is
+  the COMPLEX Morlet ``cmorB-C`` (``B`` bandwidth,
   ``C`` centre frequency), so ``|W|`` is smooth across a tone's cycles. The
   frequency of a scale is PyWavelets' *pseudo*-frequency (``central_frequency``).
   Broad real wavelets (Gaussian derivatives, to a lesser degree the Mexican hat)
@@ -40,6 +46,7 @@ from typing import Any, cast
 import numpy as np
 from numpy.typing import NDArray
 
+from quantized.calc import wavelet_origin as wo
 from quantized.heavy_import import heavy_imports
 
 __all__ = [
@@ -56,6 +63,7 @@ __all__ = [
     "parse_levels",
     "pywt_module",
     "reconstruct",
+    "smooth_cutoff",
     "sure_threshold",
     "universal_threshold",
     "wavedec",
@@ -73,7 +81,7 @@ WAVELETS_MISSING = (
 WAVELET_FAMILIES = ("morlet", "mexican-hat", "gaussian")
 DISCRETE_MODES = (
     "symmetric", "periodization", "zero", "constant", "smooth",
-    "reflect", "antisymmetric", "antireflect", "periodic",
+    "reflect", "antisymmetric", "antireflect", "periodic", wo.ORIGIN_PERIODIC,
 )  # fmt: skip
 #: Donoho-Johnstone: median(|Gaussian|) = 0.6745 sigma.
 _MAD_TO_SIGMA = 0.6745
@@ -131,8 +139,22 @@ def _finite_record(y: Vec, what: str) -> Vec:
     return arr
 
 
-def _checked_level(n: int, wavelet: str, level: int | None, default: int = 5) -> int:
-    top = max_level(n, wavelet)
+def _origin_top_level(n: int, wavelet: str) -> int:
+    """Deepest level the Origin periodic scheme accepts for ``n`` rows (0: none)."""
+    top = 0
+    while n % (1 << (top + 1)) == 0:
+        try:
+            wo.check_origin_level(pywt_module(), n, wavelet, top + 1)
+        except ValueError:
+            break
+        top += 1
+    return top
+
+
+def _checked_level(
+    n: int, wavelet: str, level: int | None, default: int = 5, mode: str = "symmetric"
+) -> int:
+    top = _origin_top_level(n, wavelet) if mode == wo.ORIGIN_PERIODIC else max_level(n, wavelet)
     if top < 1:
         raise ValueError(f"{n} rows are too few for a {wavelet} decomposition")
     if level is None:
@@ -148,10 +170,20 @@ def wavedec(
     """Multilevel DWT: ``([cA_n, cD_n, ..., cD_1], level)``."""
     check_discrete(wavelet, mode)
     arr = _finite_record(y, "the wavelet transform")
-    lev = _checked_level(arr.size, wavelet, level)
+    lev = _checked_level(arr.size, wavelet, level, mode=mode)
     pywt = pywt_module()
+    if mode == wo.ORIGIN_PERIODIC:
+        return wo.origin_wavedec(pywt, arr, wavelet, lev), lev
     coeffs = pywt.wavedec(arr, wavelet, mode=mode, level=lev)
     return [np.asarray(c, dtype=float) for c in coeffs], lev
+
+
+def _waverec(coeffs: list[Vec], wavelet: str, mode: str, n: int) -> Vec:
+    """Rebuild a signal of ``n`` rows from ``[cA_n, cD_n, ..., cD_1]``."""
+    pywt = pywt_module()
+    if mode == wo.ORIGIN_PERIODIC:
+        return wo.origin_waverec(pywt, coeffs, wavelet)[:n]
+    return np.asarray(pywt.waverec(coeffs, wavelet, mode=mode), dtype=float)[:n]
 
 
 def parse_levels(text: object, level: int, *, allow_approx: bool) -> set[str]:
@@ -196,8 +228,7 @@ def reconstruct(y: Vec, wavelet: str, level: int | None, mode: str, keep: set[st
     if unknown:
         raise ValueError(f"no such component for level {lev}: {', '.join(sorted(unknown))}")
     kept = [c if n in keep else np.zeros_like(c) for n, c in zip(names, coeffs, strict=True)]
-    pywt = pywt_module()
-    return np.asarray(pywt.waverec(kept, wavelet, mode=mode), dtype=float)[: np.asarray(y).size]
+    return _waverec(kept, wavelet, mode, int(np.asarray(y).size))
 
 
 # --- denoising -------------------------------------------------------------
@@ -248,6 +279,7 @@ def denoise(
     rule: str = "universal",
     threshold_mode: str = "soft",
     per_level: bool = False,
+    percent: float | None = None,
 ) -> tuple[Vec, dict[str, Any]]:
     """Wavelet shrinkage: threshold the detail levels, keep the approximation.
 
@@ -255,14 +287,25 @@ def denoise(
     ``"hard"``; ``per_level`` takes sigma from each level's own coefficients
     (coloured noise) instead of the finest level only. Returns the cleaned
     signal and ``{"sigma": {...}, "threshold": {...}, "level": n}`` keyed by
-    component name."""
-    if rule not in ("universal", "sure"):
-        raise ValueError("threshold rule must be universal or sure")
+    component name.
+
+    ``rule="percent"`` is OriginPro's custom threshold (``percent`` of the largest
+    detail coefficient, one HARD threshold for every level): see ``wavelet_origin``."""
+    if rule not in ("universal", "sure", "percent"):
+        raise ValueError("threshold rule must be universal, sure or percent")
     if threshold_mode not in ("soft", "hard"):
         raise ValueError("threshold mode must be soft or hard")
     coeffs, lev = wavedec(y, wavelet, level, mode)
     n = int(np.asarray(y).size)
     names = component_names(lev)
+    if rule == "percent":
+        if percent is None:
+            raise ValueError("the percent rule needs a percentage")
+        if threshold_mode != "hard":
+            raise ValueError("Origin's custom threshold is hard; choose hard")
+        kept, t = wo.percent_threshold(coeffs, percent)
+        info = {"level": lev, "sigma": {}, "threshold": dict.fromkeys(names[1:], t)}
+        return _waverec(kept, wavelet, mode, n), info
     pywt = pywt_module()
     sigma_global = noise_sigma(coeffs[-1])
     out = [coeffs[0]]
@@ -276,8 +319,17 @@ def denoise(
             t = _sure_level_threshold(d, sigma)
         sigmas[name], thresholds[name] = sigma, t
         out.append(np.asarray(pywt.threshold(d, t, mode=threshold_mode), dtype=float))
-    rec = np.asarray(pywt.waverec(out, wavelet, mode=mode), dtype=float)[:n]
+    rec = _waverec(out, wavelet, mode, n)
     return rec, {"level": lev, "sigma": sigmas, "threshold": thresholds}
+
+
+def smooth_cutoff(
+    y: Vec, wavelet: str, level: int | None, mode: str, cutoff: float
+) -> tuple[Vec, int, int]:
+    """OriginPro's ``wtsmooth`` cutoff: ``(smoothed, level, coefficients zeroed)``."""
+    coeffs, lev = wavedec(y, wavelet, level, mode)
+    kept, zeroed = wo.smooth_cutoff(coeffs, cutoff)
+    return _waverec(kept, wavelet, mode, int(np.asarray(y).size)), lev, zeroed
 
 
 # --- continuous transform ---------------------------------------------------

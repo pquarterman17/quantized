@@ -142,7 +142,7 @@ def _dwt(data: DataStruct, chans: list[int], a: dict[str, Any]) -> tuple[DataStr
         "dx": float(x[1] - x[0]),
         "note": "coefficients run [cA_n, cD_n, ..., cD_1]; shorter columns are padded blank "
         "to the longest; rebuild with pywt.waverec on each channel's columns trimmed to "
-        "`lengths`",
+        "`lengths` (mode origin-periodic: calc.wavelet_origin.origin_waverec)",
     }
     out = DataStruct.create(
         np.arange(rows, dtype=float),
@@ -178,6 +178,8 @@ def _smooth(data: DataStruct, chans: list[int], a: dict[str, Any]) -> tuple[Data
     wavelet, level, mode = _discrete_args(a)
     x, v = _columns(data, chans)
     _check_x(x)
+    if not _blank(a, "cutoff"):  # OriginPro's wtsmooth: a percentage of the detail coefficients
+        return _smooth_cutoff(data, chans, a, (wavelet, level, mode), v)
     lev = wv.wavedec(v[:, 0], wavelet, level, mode)[1]
     zero = wv.parse_levels(a.get("zero", "1"), lev, allow_approx=False)
     keep = set(wv.component_names(lev)) - zero
@@ -193,9 +195,32 @@ def _smooth(data: DataStruct, chans: list[int], a: dict[str, Any]) -> tuple[Data
     return _curve_result(data, chans, a, "wavelet-smooth", cols, tag, info), []
 
 
+def _smooth_cutoff(
+    data: DataStruct,
+    chans: list[int],
+    a: dict[str, Any],
+    spec: tuple[str, int | None, str],
+    v: NDArray[np.float64],
+) -> tuple[DataStruct, list[str]]:
+    wavelet, level, mode = spec
+    cutoff = _num(a, "cutoff", 0.0)
+    cols: list[NDArray[np.float64]] = []
+    zeroed: list[int] = []
+    lev = 0
+    for k in range(len(chans)):
+        col, lev, z = wv.smooth_cutoff(v[:, k], wavelet, level, mode, cutoff)
+        cols.append(col)
+        zeroed.append(z)
+    info = {"kind": "smooth-cutoff", "wavelet": wavelet, "level": lev, "mode": mode,
+            "cutoff": cutoff, "zeroed": zeroed}  # fmt: skip
+    tag = f"wavelet smooth (cutoff {cutoff:g}%)"
+    return _curve_result(data, chans, a, "wavelet-smooth", cols, tag, info), []
+
+
 def _denoise(data: DataStruct, chans: list[int], a: dict[str, Any]) -> tuple[DataStruct, list[str]]:
     wavelet, level, mode = _discrete_args(a)
-    rule = _text(a, "rule", "universal", ("universal", "sure"))
+    rule = _text(a, "rule", "universal", ("universal", "sure", "percent"))
+    percent = _num(a, "percent", 50.0) if rule == "percent" else None
     tmode = _text(a, "threshold", "soft", ("soft", "hard"))
     scope = _text(a, "scope", "global", ("global", "per-level"))
     x, v = _columns(data, chans)
@@ -206,10 +231,14 @@ def _denoise(data: DataStruct, chans: list[int], a: dict[str, Any]) -> tuple[Dat
     for k, c in enumerate(chans):
         col, info = wv.denoise(
             v[:, k], wavelet, level, mode,
-            rule=rule, threshold_mode=tmode, per_level=scope == "per-level",
+            rule=rule, threshold_mode=tmode, per_level=scope == "per-level", percent=percent,
         )  # fmt: skip
         cols.append(col)
         infos[data.labels[c]] = info
+        if rule == "percent":
+            t = next(iter(info["threshold"].values()))
+            warns.append(f"{data.labels[c]}: hard threshold {t:.4g} on every level.")
+            continue
         sig = info["sigma"]["D1"]
         thr = ", ".join(f"{n} {t:.4g}" for n, t in info["threshold"].items())
         if sig <= 1e-12 * float(np.max(np.abs(v[:, k]))):  # rounding dust, not noise
@@ -222,7 +251,7 @@ def _denoise(data: DataStruct, chans: list[int], a: dict[str, Any]) -> tuple[Dat
     lev = next(iter(infos.values()))["level"]
     tag = f"wavelet denoise ({rule}, {tmode})"
     meta = {"kind": "denoise", "wavelet": wavelet, "level": lev, "mode": mode, "rule": rule,
-            "threshold": tmode, "scope": scope, "channels": infos}  # fmt: skip
+            "percent": percent, "threshold": tmode, "scope": scope, "channels": infos}  # fmt: skip
     return _curve_result(data, chans, a, "wavelet-denoise", cols, tag, meta), warns
 
 
@@ -286,7 +315,8 @@ def _cwt(data: DataStruct, chans: list[int], a: dict[str, Any]) -> tuple[DataStr
     info = {
         "kind": "cwt", "wavelet": name, "family": family, "axis": kind, "spacing": spacing,
         "min": float(ax_sorted[0]), "max": float(ax_sorted[-1]), "count": int(ax_sorted.size),
-        "dt": dt, "centerFrequency": fc, "magnitude": "|W|, L2-normalised (1/sqrt(scale))",
+        "dt": dt, "centerFrequency": fc,
+        "magnitude": "|W|, L2-normalised: s^-1/2 sum y[k] psi((k-n+0.5)/s)",
     }  # fmt: skip
     if output == "ridge":
         top = np.argmax(z, axis=0)

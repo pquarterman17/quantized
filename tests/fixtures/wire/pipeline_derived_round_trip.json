@@ -1,0 +1,133 @@
+{
+ "csv": "f,R,X\n10,50,-20\n100,55,-13\n1000,60,-6\n10000,65,1\n100000,70,8\n",
+ "app": {
+  "time": [
+   10,
+   100,
+   1000,
+   10000,
+   100000
+  ],
+  "labels": [
+   "R",
+   "X",
+   "dbl",
+   "rate",
+   "reA",
+   "imA",
+   "cjB",
+   "absB",
+   "argB",
+   "mag",
+   "bad",
+   "Z (re)",
+   "Z (im)"
+  ],
+  "units": [
+   "Ω",
+   "Ω",
+   "Ω",
+   "Ω/Hz",
+   "Ω",
+   "Ω",
+   "Ω",
+   "Ω",
+   "",
+   "Ω",
+   "",
+   "Ω",
+   "Ω"
+  ],
+  "values": [
+   [
+    50,
+    -20,
+    100,
+    5,
+    50,
+    0,
+    -20,
+    20,
+    3.141592653589793,
+    53.851648071345046,
+    60,
+    50.01997499666875,
+    -19.94999000833417
+   ],
+   [
+    55,
+    -13,
+    110,
+    0.55,
+    55,
+    0,
+    -13,
+    13,
+    3.141592653589793,
+    56.51548460377916,
+    155,
+    55.12724785626076,
+    -12.449359172037482
+   ],
+   [
+    60,
+    -6,
+    120,
+    0.06,
+    60,
+    0,
+    -6,
+    6,
+    3.141592653589793,
+    60.29925372672534,
+    1060,
+    60.299250416562515,
+    0.019980007141534806
+   ],
+   [
+    65,
+    1,
+    130,
+    0.0065,
+    65,
+    0,
+    1,
+    1,
+    0,
+    65.00769185258002,
+    10065,
+    34.278178896621185,
+    55.23591631838141
+   ],
+   [
+    70,
+    8,
+    140,
+    0.0007,
+    70,
+    0,
+    8,
+    8,
+    0,
+    70.45565981523414,
+    100070,
+    -54.382838148236715,
+    -44.79404999486751
+   ]
+  ],
+  "added": [
+   "dbl",
+   "rate",
+   "reA",
+   "imA",
+   "cjB",
+   "absB",
+   "argB",
+   "mag",
+   "bad",
+   "Z (re)",
+   "Z (im)"
+  ]
+ },
+ "script": "#!/usr/bin/env python3\n\"\"\"Quantized pipeline: reproducible analysis script (12 steps).\n\nRe-runs the recorded data pipeline headless with the public quantized.api\n(pip install quantized-lab). It runs in this process: no app or server is needed,\nand the project open in the app is not changed. Steps with no quantized.api\nequivalent are kept as comments that say so.\n\nUsage: python <this file> [INPUT ...] [--out OUT]\n  INPUT  the file(s) the pipeline imports, in order (default: the recorded names)\n  OUT    where the final data goes: .csv, .tsv or .xlsx (default pipeline_output.csv)\n\"\"\"\n\nimport argparse\nimport sys\n\nimport quantized.api as qz\n\nRECORDED_INPUTS = [\"z.csv\"]\n\n\ndef main(argv=None):\n    parser = argparse.ArgumentParser(description=\"Re-run a recorded Quantized pipeline.\")\n    parser.add_argument(\"inputs\", nargs=\"*\", help=\"input file(s), in import order\")\n    parser.add_argument(\"--out\", default=\"pipeline_output.csv\", help=\"output table (.csv/.tsv/.xlsx)\")\n    args = parser.parse_args(argv)\n    if hasattr(sys.stdout, \"reconfigure\"):  # labels may hold μ etc.; a cp1252 console must not crash\n        sys.stdout.reconfigure(errors=\"backslashreplace\")\n    if not args.inputs and None not in RECORDED_INPUTS:\n        args.inputs = list(RECORDED_INPUTS)\n    if len(args.inputs) != len(RECORDED_INPUTS):\n        parser.error(f\"give {len(RECORDED_INPUTS)} input file(s)\")\n    data = None\n    formulas = []  # the formula columns (name, expression), recomputed after each correction\n\n    # 1. Import z.csv\n    data = qz.load(args.inputs[0])\n    raw = data  # the uncorrected base that corrections start from\n    roles = qz.seed_error_roles(data)  # the error-column roles the app gives the file on import\n\n    # 2. Add column dbl\n    base = data  # the worksheet before its formula columns\n    formulas.append({\"name\": \"dbl\", \"expr\": \"2 * A\", \"unit\": \"Ω\"})\n    data = qz.add_formula_columns(base, formulas)\n\n    # 3. Add column rate\n    formulas.append({\"name\": \"rate\", \"expr\": \"A / x\", \"unit\": \"Ω/Hz\"})\n    data = qz.add_formula_columns(base, formulas)\n\n    # 4. Add column reA\n    formulas.append({\"name\": \"reA\", \"expr\": \"re(A)\", \"unit\": \"Ω\"})\n    data = qz.add_formula_columns(base, formulas)\n\n    # 5. Add column imA\n    formulas.append({\"name\": \"imA\", \"expr\": \"im(A)\", \"unit\": \"Ω\"})\n    data = qz.add_formula_columns(base, formulas)\n\n    # 6. Add column cjB\n    formulas.append({\"name\": \"cjB\", \"expr\": \"conj(B)\", \"unit\": \"Ω\"})\n    data = qz.add_formula_columns(base, formulas)\n\n    # 7. Add column absB\n    formulas.append({\"name\": \"absB\", \"expr\": \"abs(B)\", \"unit\": \"Ω\"})\n    data = qz.add_formula_columns(base, formulas)\n\n    # 8. Add column argB\n    formulas.append((\"argB\", \"arg(B)\"))\n    data = qz.add_formula_columns(base, formulas)\n\n    # 9. Add column mag\n    formulas.append({\"name\": \"mag\", \"expr\": \"abs(complex(A, B))\", \"unit\": \"Ω\"})\n    data = qz.add_formula_columns(base, formulas)\n\n    # 10. Add column bad\n    # the app added this column WITHOUT a unit: its operands' units contradicted each other\n    formulas.append((\"bad\", \"A + x\"))\n    data = qz.add_formula_columns(base, formulas)\n\n    # 11. Add column Z (re)\n    formulas.append({\"name\": \"Z (re)\", \"expr\": \"re(complex(A, B) * exp(complex(0, x / 1e4)))\", \"unit\": \"Ω\"})\n    data = qz.add_formula_columns(base, formulas)\n\n    # 12. Add column Z (im)\n    formulas.append({\"name\": \"Z (im)\", \"expr\": \"im(complex(A, B) * exp(complex(0, x / 1e4)))\", \"unit\": \"Ω\"})\n    data = qz.add_formula_columns(base, formulas)\n\n    if data is None:\n        print(\"nothing to save: no step loaded data\")\n        return 1\n    qz.save_table(data, args.out, overwrite=True, protect=args.inputs)  # replaces --out, never an input\n    print(f\"saved {args.out}\")\n    return 0\n\n\nif __name__ == \"__main__\":\n    raise SystemExit(main())\n"
+}

@@ -112,7 +112,7 @@ export default function SigopWaveletFields({ method, form, set, xUnit }: Props) 
           <label>Output
             <Select aria-label="Output" value={form.cwtOutput} options={[{ value: "scalogram", label: "Scalogram map (|coefficients|)" }, { value: "ridge", label: "Ridge (strongest scale per X)" }]} onChange={(e) => set({ cwtOutput: e.target.value as SigopForm["cwtOutput"] })} />
           </label>
-          <p className="qz-muted">Pick one signal column. Needs an increasing, uniform X. The scalogram is a map dataset (X by {form.cwtAxis}); blank limits mean automatic. Broad real wavelets (Mexican hat, Gaussian) smear the ridge; Morlet is the accurate one.</p>
+          <p className="qz-muted">Pick one signal column. Needs an increasing, uniform X. The scalogram is a map dataset (X by {form.cwtAxis}); blank limits mean automatic. Broad real wavelets (Mexican hat, Gaussian) smear the ridge; Morlet is the accurate one. Coefficients are L2-normalised (each scale is divided by √scale, scales in samples), as PyWavelets and OriginPro do.</p>
         </>
       );
     }
@@ -136,7 +136,8 @@ export default function SigopWaveletFields({ method, form, set, xUnit }: Props) 
         <>
           <DiscreteFields form={form} set={set} />
           <LevelBoxes level={levels} withApprox={false} isOn={(t) => levelTokens(form.smoothZero).includes(t)} toggle={(t) => set({ smoothZero: toggled(form.smoothZero, t) })} />
-          <p className="qz-muted">Tick the detail levels to remove; D1 is the finest. The approximation and the other levels are kept.</p>
+          <Field label="Origin cutoff (% of detail coefficients)" min={0} step="any" placeholder="off" value={form.smoothCutoff} onChange={(smoothCutoff) => set({ smoothCutoff })} />
+          <p className="qz-muted">Tick the detail levels to remove; D1 is the finest. The approximation and the other levels are kept. Or fill the cutoff (OriginPro's wtsmooth): that share of the detail coefficients is zeroed, finest level first and from the last index back, and the ticks are ignored. Pair it with the origin-periodic edge extension to match Origin.</p>
         </>
       );
     case "wavelet-denoise":
@@ -144,15 +145,16 @@ export default function SigopWaveletFields({ method, form, set, xUnit }: Props) 
         <>
           <DiscreteFields form={form} set={set} />
           <label>Threshold rule
-            <Select aria-label="Threshold rule" value={form.denoiseRule} options={[{ value: "universal", label: "Universal (VisuShrink)" }, { value: "sure", label: "SURE (SureShrink)" }]} onChange={(e) => set({ denoiseRule: e.target.value as SigopForm["denoiseRule"] })} />
+            <Select aria-label="Threshold rule" value={form.denoiseRule} options={[{ value: "universal", label: "Universal (VisuShrink)" }, { value: "sure", label: "SURE (SureShrink)" }, { value: "percent", label: "Percent of largest detail (Origin custom)" }]} onChange={(e) => set({ denoiseRule: e.target.value as SigopForm["denoiseRule"] })} />
           </label>
-          <label>Thresholding
+          {form.denoiseRule === "percent" && <Field label="Threshold (% of largest detail)" min={0} step="any" value={form.denoisePercent} onChange={(denoisePercent) => set({ denoisePercent })} />}
+          {form.denoiseRule !== "percent" && <label>Thresholding
             <Select aria-label="Thresholding" value={form.denoiseThreshold} options={[{ value: "soft", label: "Soft" }, { value: "hard", label: "Hard" }]} onChange={(e) => set({ denoiseThreshold: e.target.value as SigopForm["denoiseThreshold"] })} />
-          </label>
+          </label>}
           <label>Noise estimate
             <Select aria-label="Noise estimate" value={form.denoiseScope} options={[{ value: "global", label: "One value, from the finest level" }, { value: "per-level", label: "Per level (coloured noise)" }]} onChange={(e) => set({ denoiseScope: e.target.value as SigopForm["denoiseScope"] })} />
           </label>
-          <p className="qz-muted">Noise σ = median |finest detail| / 0.6745. The estimated σ and thresholds are listed under the preview.</p>
+          <p className="qz-muted">Noise σ = median |finest detail| / 0.6745. The estimated σ and thresholds are listed under the preview. The percent rule is OriginPro's custom threshold: one hard threshold for every level, no noise estimate (OriginPro's sqtwolog is not reproduced).</p>
         </>
       );
   }

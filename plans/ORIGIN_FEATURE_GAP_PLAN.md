@@ -13,7 +13,7 @@ evidence stays in the appendix `ORIGIN_STUDENT_GAP_FINDINGS.md`.
 **Contracts:** `ROW_RANGE_CONTRACT.md` (items 31, 34) and `PRESET_BAR_CONTRACT.md` (item 40), both accepted 2026-11-26
 **Related:** `SCIENTIFIC_WORKBENCH_REPLACEMENT_PLAN.md` (cross-product journeys and acceptance criteria; its criteria for items 31, 34, 43, 44 and 47 are booked on those items)
 **Created:** 2026-11-25
-**Updated:** 2026-11-27 (wave 15: #1179 and #1181–#1185 merged, #1180 in CI; item 43 complete; item 50 booked from OG23; 33 items open; pass 9 fixed; owner gate OG22 open; OG15 provisional)
+**Updated:** 2026-11-28 (wave 16: #1186–#1195 merged; items 13, 35, 40 and 50 complete; 29 items open; lanes for items 6, 7, 10, 11 and 23 and acceptance pass 10 running; owner gate OG22 open; OG15 and OG23 to revisit)
 **Baseline:** `origin/main` at `0f4b7bac0` (v0.45.0 + #1032)
 
 ---
@@ -352,20 +352,18 @@ means that answer. Open:
 
 ## Cross-cutting priorities
 
-The "start here" view: the open work worth doing next, ungated. Items 2, 3, 4, 5, 17, 18, 25, 28, 29, 32, 37, 38 and 43
-are complete; the others shipped their main part and keep the sub-tasks listed under each item. Wave 9 is running.
+The "start here" view: the open work worth doing next, ungated. Items 2, 3, 4, 5, 13, 17, 18, 25, 28, 29, 32, 35, 37, 38, 40, 43 and 50
+are complete; the others shipped their main part and keep the sub-tasks listed under each item.
 
 | # | Item | Workstream | Why first | Model |
 |---|------|------------|-----------|-------|
-| 47 | The acceptance pass over #1167 onward | W2 | Every pass so far found a wrong value behind a green suite | Sonnet 5.5 |
-| 47 | The acceptance pass over #1167 onward; then Publication Preview on the resolver, the HTML clipboard into Word, and a 10,000-bar 3-D SVG at 10 MB | W2 | Every pass so far found a wrong value behind a green suite | Sonnet 5.5 |
+| 47 | Acceptance pass 11 over #1186 onward (pass 10, over #1180–#1189, is running); then Publication Preview on the resolver, the HTML clipboard into Word, and a 10,000-bar 3-D SVG at 10 MB | W2 | Every pass so far found a wrong value behind a green suite | Sonnet 5.5 |
 | 31 | Facet, axis-break and spatial plots under a row window; R3's series checklist and destination workbook | W3 | R0–R3 and most of R2 shipped (#1136, #1165, #1174) | Sonnet 5.5 |
-| 40 | P5–P6: the remaining workshops, Export and Import, the Recipe Library listing; the hidden-field rule (#1178) on the P5a adapters | W4 | P1–P4 and P5a shipped (#1104, #1124, #1160, #1169, #1170, #1176) | Sonnet 5.5 |
-| 34 | A live named-range link for plots and analyses (`PlotView.rowRange = { named }`); the rest of the worksheet structure list | W3 | R4a–R4c shipped (#1164, #1172, #1175) | Sonnet 5.5 |
-| 9 | The 23 functions Origin cannot fit headless, FarazdaghiHarris, the SchulzFlory standard errors, Dhyperbl through the picker, the Sine order and ExpGrow2 bounds, an `.opju` fit-name mapping | W1 | Imported fits cannot find the functions yet | Sonnet 5.5 on the Origin PC |
+| 34 | The rest of the worksheet structure list; the named-range residue | W3 | R4a–R4c and the live link shipped (#1164, #1172, #1175, #1195) | Sonnet 5.5 |
+| 33 | Dialog columns in exported scripts; signal-processing functions in formulas | W3 | Complex formulas export since #1190 | Sonnet 5.5 |
 | 22, 24 | Residue: scrolling on probability and Y3+ axes, the box filter on turned and multi-panel plots; per-point text symbols on grouped, encoded, faceted and per-series-X views and in graph templates | W2 | Main parts shipped (#1154, #1156) | Sonnet 5.5 |
-| 33 | Signal-processing functions in formulas; complex formulas in exported scripts | W3 | Complex numbers, `beta` / `lbeta` and `let` reopen shipped (#1155, #1168) | Sonnet 5.5 |
-
+| 12 | A per-dataset model on the global fit; a per-pixel map-stack fit | W1 | Rank all models shipped (#1193) | Sonnet 5.5 |
+| 9 | The 23 functions Origin cannot fit headless and the other fit-library remainders | W1 | Imported fits cannot find the functions yet | Sonnet 5.5 on the Origin PC |
 ---
 
 ## W1 — Analysis & fitting
@@ -438,18 +436,12 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
 12. **Fit residue** — multi-output models, rank-all-models, per-pixel fit through a map stack, a guided standard-curve tool, pulse fit.
     - Model: **Claude Sonnet 5.5**; the first sub-task is a read-only check for Haiku 5.5. Size M.
     - Source: A1, F.
-    - [ ] Verify whether Global Fit and Surface Fit already cover the multi-output and matrix cases
-    - [ ] Build only what the check leaves open
-
-13. **Math extras** — polygon and surface area, trace and 3D interpolation, B-spline resampling, 2D correlation of two maps, an equation / optimisation solver.
-    - Model: **Claude Haiku 5.5** (alt ChatGPT Luna) for the closed-form ones; Sonnet 5.5 for the solver. Size S each. Oracle: yes for most.
-    - Source: A5, F, G.
-    - [x] Areas, trace and scattered interpolation, B-spline resampling, map correlation, root and minimum solver (#1059)
-    - [x] Scattered-interpolation query points from another worksheet's columns (#1076)
-    - [x] Surface area checked against Origin's `marea` (#1088: a 2- versus 4-triangle split, 0.02% apart)
-    - [ ] Local or masked normalisation for the map correlation, and an option without mean subtraction to match Origin's `corr2`
-    - [ ] Systems of equations and constraints beyond bounds in the solver
-    - [x] Math extras in the "Open in tool" registry and the window-layout catalog, with reopen and Replace (#1076)
+    - [x] The check (#1193): Global Fit shares parameters across datasets and Surface Fit covers z = f(x, y), but one model per dataset (y1 = f1, y2 = f2 with shared parameters) is not reachable, because the global route takes one model; no per-pixel map-stack fit exists; the Pulse family (Pulse, Pulse1, Exp2PMod1/2) was already present and matches Origin
+    - [x] Rank all models by category: AIC, AICc, BIC, adjusted R², reduced χ² and converged, sortable, best by AICc preselected, "Use this model" into Curve Fit; checked against statsmodels (#1193)
+    - [x] A guided standard-curve tool (#1180)
+    - [ ] Multi-output models: a per-dataset model on the global-fit route (the calc already allows it)
+    - [ ] A per-pixel fit through a map stack (design note in #1193)
+    - [ ] The rank table no longer shows the Akaike weight (still in the payload)
 
 14. **Advanced statistics** — MANOVA, mixed models, factor analysis, Gaussian mixtures, ICA, canonical correlation, NMDS, GAM, trees and forests, neural-net regression, probit. *Per project (OG5, 2026-11-26): a method is built only when a real project names it, on the statsmodels `[stats]` extra.*
     - Model: scope and contracts by **Claude Opus 5.5** (alt ChatGPT Sol high); implementation by Sonnet 5.5. Size L.
@@ -602,7 +594,9 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
     - Source: C3.
     - [x] Special, engineering, data and lookup functions (#1063: 33 element-wise names mirrored in the headless exporter against one shared fixture; lookups are app-only)
     - [x] Complex numbers inside formulas: `complex`, `polar`, imaginary literals, `re`/`im`/`abs`/`arg`/`conj` and the complex elementary functions; cells stay real, a complex result is an error unless reduced, and Set Column Values writes both parts as two columns; real formulas unchanged; app-only (#1155; design in `plans/COMPLEX_FORMULA_CONTRACT.md`, which the code cites)
-    - [ ] Complex formulas in exported scripts (the headless mirror refuses them today), and a re / im column pair for Argand and Nyquist plots
+    - [x] Complex formulas in exported scripts: the headless evaluator runs the C1–C6 subset, pinned by a 159-case wire fixture and a script round trip; the re / im pair from Set Column Values is marked and offers Argand and Nyquist plots from its column menu (#1190)
+    - [ ] Set Column Values and ƒx-bar columns record `derived: true`, which the exporter has always marked NOT REPRODUCED, so dialog columns, complex or real, do not export yet. A derived column without error propagation could export as a formula step; its unit label needs a choice (carry it, or a comment)
+    - [ ] `re(A)` / `conj(A)` of a column with no complex source stay app-only in scripts; the Argand / Nyquist entries are in the column menu only (no palette or Plot-menu entry)
     - [ ] Signal-processing functions in formulas
     - [x] `beta` / `lbeta` for negative non-integer arguments follow scipy (reflection; poles as scipy), in the app and the headless mirror against the shared fixture (#1168)
     - [x] Reopening a `let` formula over a row range shows the text as typed (#1168)
@@ -619,13 +613,9 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
     - [x] Slice R4a: the named range model, store, undo, column and row remaps, Append project, delete cascade and stale marking, gated at v9 (#1164)
     - [x] Slice R4b: `rng("Name")` in aggregate arguments, recalc edges, rename rewrite, cut on delete, cycle refusal, app-only (#1172)
     - [x] Slice R4c: the Name box, the Named Ranges manager (rename, retarget, delete with dependants), plot and analysis from a named range, `rng()` in the formula help (#1175)
-    - [ ] A live named-range link for plots and analyses (the contract's `{ named: id }`; #1175 takes a snapshot); a Trash restore that brings back a sheet's ranges; a copied sheet's `rng()` links still read the original's block
+    - [x] A live named-range link for plots and analyses (`PlotView.rowRange = { named }`): a plot or fit follows a retarget and row edits, and a deleted or stale range refuses, never widening to every row; Trash restore brings back a sheet's ranges; a copied sheet gets its own range for each one its formulas read (#1195)
+    - [ ] Named-range residue: figure documents keep a snapshot, not a live link; a saved result does not go out of date when its range moves; formulas on another sheet cut by a trashed range stay cut after restore
     - [ ] The rest needs no decision: sheet protection without a password (OG1 keeps password protection out), a column list view, a show-formulas toggle, time-series pivot, inserting a column into every similar sheet
-
-35. **Export writers** — worksheet to PDF or image, XML, SQLite and NetCDF map output, on the converter's writer pattern.
-    - Model: **Claude Haiku 5.5** (alt ChatGPT Luna). Size S each.
-    - Source: C2.
-    - [ ] Verify worksheet-to-PDF is absent before building
 
 36. **Other-software and domain imports** — Prism, Minitab, SAS, SigmaPlot; battery cyclers (BioLogic, Neware, Ivium, Metrohm); ChemStation and NMR; ODBC / SQL servers; Google Sheets. *Not scheduled (OG3, OG7, 2026-11-26): no domain family wanted and no specimen files yet.*
     - Model: **Claude Sonnet 5.5** per format. Size M each.
@@ -645,28 +635,7 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
     - [x] Presets of the wave 5 item 20 types (#1078: split violin, paired + mean ± 95% CI, sorted lollipop, stacked histogram)
     - [ ] Presets of later item 20 types as they land (the preset test caps the gallery at 20, which it now holds)
 
-50. **One editor per plot object** — the double-click popup is the only editor for an axis, a curve and the legend; the right panel names the selection, offers Edit…, and keeps plot-wide settings. *Owner-reported 2026-11-27 while testing rc1; decided as OG23.*
-    - Model: contract by **Claude Opus 5.5**; the four lanes by **Claude Sonnet 5.5**. Size L.
-    - Source: owner report (double-clicking an axis showed the Axis popup and the same fields in the right panel at once).
-    - [x] Contract: `OBJECT_EDITOR_CONTRACT.md` (decisions E1–E10, 2026-11-27)
-    - [ ] Lane A: the Axis popup holds every per-axis control the panel has, the axis title included
-    - [ ] Lane B: Plot Details becomes the whole curve editor, in tabs, over a draft
-    - [ ] Lane C: the Legend popup holds every legend control; an outside click on an edited popup asks before discarding
-    - [ ] Lane D, after A–C: the right panel drops those controls for a name and an Edit… button, and the Axes card keeps plot-wide settings with X / Y / Y2 launchers
-
 ### Tier 2 — Medium Impact
-
-40. **Preset bar on every tool** — named settings plus last-used values on each analysis workshop, generalising recipes and fit templates. *Opened 2026-11-26 (OG13).*
-    - Model: contract by **Claude Opus 5.5** (alt ChatGPT Sol high): store, project-file persistence, versioning; rollout per workshop by Haiku 5.5, ChatGPT Luna or Terra. Size L.
-    - Source: H2 idea 2.
-    - [x] Contract: `PRESET_BAR_CONTRACT.md` (accepted 2026-11-26)
-    - [x] Slice P1: the preset core, the bar and the Resample adapter; user-level `qz.presets`, last used is opt-in, and schema handling fails closed (#1104)
-    - [x] Slice P2: the Curve Fit preset bar over fit templates (the old Templates section is removed); a missing manual-error column is listed as skipped instead of silently dropped; Save-as asks before replacing a preset, for Resample and Curve Fit (#1124)
-    - [x] Slice P3: Peaks over the existing peak recipes and Baseline on the generic store, one Baseline method list (#1160)
-    - [x] Slice P4: Distribution, Statistical tests, Outlier screening, Multivariate, Variability and Tabulate, each option list from one shared module (#1169, #1170)
-    - [x] Slice P5, first part: Signal Processing, Time series and Hysteresis (#1176); adapters no longer validate knobs a mode hides (#1178)
-    - [x] Slices P5–P6: Export and Import presets with the `(imported)` merge rule, the Recipe Library listing (#1181); Map operations, Design of experiments, Film thickness (FFT) and the SIMS Process tab, the hidden-field rule on the P5a adapters, and the "press Save result" wording (#1184)
-    - [ ] The workshops still without a bar: Reductions' Williamson-Hall, Pawley, XRD reference pattern and Reflectivity FFT methods; the SIMS Compare, Align and Region tabs; Optical gap; Surface fit
 
 41. **Properties navigator** — one properties surface with a graph › layer › plot tree, several axes edited together, "Apply to…" other layers and graphs, and previous / next in column properties. *Not scheduled (OG13, 2026-11-26).*
     - Model: interaction design by **ChatGPT Sol high**, implementation by **ChatGPT Terra high**; Claude Sonnet 5.5 reviews the canonical-state writes. Size L.
@@ -704,6 +673,10 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
 
 ## Completed
 
+- ~~**#50 One editor per plot object**~~ (2026-11-28, #1187, #1188, #1189, #1194; contract `OBJECT_EDITOR_CONTRACT.md`, OG23) — the double-click popup is the only editor for an axis, a curve and the legend: the Axis popup gained the title, Y2 "Same as Y" and the X date modes; Plot details became a tabbed curve editor over one draft; an outside click on an edited popup asks before discarding; the right panel names the selection with Edit… and keeps plot-wide settings, with X / Y / Y2 / Y3+ launchers. Reversible: one switch (`lib/objectEditorMode.ts`) and a reversal ledger in the contract. Not done: a channel that is not plotted cannot have its curve style edited.
+- ~~**#40 Preset bar on every tool**~~ (2026-11-28, #1104, #1124, #1160, #1169, #1170, #1176, #1178, #1181, #1184, #1191) — named settings and last-used values on every analysis tool the plan lists (26 tools), with export and import, the Recipe Library listing, the hidden-field rule and one option list per tool. #1191 also stopped Optical gap overwriting a preset's unit and signal. Judgement calls in #1191: Surface fit stores no start values or bounds; SIMS Region writes last used on export.
+- ~~**#13 Math extras**~~ (2026-11-28, #1059, #1076, #1088, #1192) — areas, trace and scattered interpolation, B-spline resampling, map correlation with "subtract means" (off equals Origin's `corr2`; the strict xfail became a passing test) and a local normalisation over the overlap, a root and minimum solver with systems of equations and equality / inequality constraints (SLSQP or trust-constr, active constraints named). The local window is the per-offset overlap, not a drawn region.
+- ~~**#35 Export writers**~~ (2026-11-28, #1180) — SQLite, XML, NetCDF map output and worksheet to PDF on the converter's writer pattern; the XML writer drops the characters XML 1.0 forbids.
 - ~~**#43 Role grid at plot time**~~ (2026-11-27, #1182) — Plot setup's role grid picks X, Y, error and label columns per plot, independent of designations; a Y alone with one designated X plots directly and competing matches get a role picker; a read-only plot list shows each plot's range. Built only the difference from Quick Plot and Graph Builder. Not done: the Set As overlay in `resolveSelectionPlot`, a per-row X-error target, role editing from the plot list, a toolbar button.
 - ~~**#8 Statistics completions**~~ (2026-11-27, #1091, #1093, #1105, #1161) — power and sample size with curves, probability calculator, row-wise t-tests with adjusted p, Steel-Dwass, ANOVA effect sizes (now also repeated-measures and Welch), Mann-Kendall and seasonal Mann-Kendall with Sen's slope, a Distribution confidence-interval table, exact binomial power and its detectable effect, and reopen entries for the CI table and the row-wise worksheet; each against scipy / statsmodels oracles. Not done: the Hirsch-Slack serial-dependence correction for seasonal Mann-Kendall and a heterogeneity-of-trend test.
 - ~~**#48 3D bars and vectors, and 3D scatter extras**~~ (2026-11-27, #1098, #1106, #1128, #1143, #1149, #1153) — 3-D bars and vectors on the shared renderer and camera, scatter colour / size / groups / error bars / wall shadows, vectors coloured by length or any column, bars coloured by a column, grouped side by side, or sized in data units; the 3-D panel starts collapsed, opens for a refusal it can fix and docks beside a wide scene. Screen and export pinned by `plot3d_kinds.json`; every field gated at v9.

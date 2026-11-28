@@ -94,6 +94,20 @@ describe("Signal Processing: wavelets", () => {
     await waitFor(() => expect(vi.mocked(sigopDataset).mock.calls.at(-1)![0].args).toMatchObject({ zero: "1,2" }));
   });
 
+  it("the Origin cutoff and percent rule are sent through the panel", async () => {
+    render(<SignalProcessingPanel />);
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "wavelet-smooth" } });
+    fireEvent.change(await screen.findByLabelText("Edge extension"), { target: { value: "origin-periodic" } });
+    fireEvent.change(screen.getByLabelText("Origin cutoff (% of detail coefficients)"), { target: { value: "40" } });
+    await waitFor(() => expect(vi.mocked(sigopDataset).mock.calls.at(-1)![0].args).toMatchObject({ mode: "origin-periodic", cutoff: 40 }));
+    expect(vi.mocked(sigopDataset).mock.calls.at(-1)![0].args).not.toHaveProperty("zero");
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "wavelet-denoise" } });
+    fireEvent.change(await screen.findByLabelText("Threshold rule"), { target: { value: "percent" } });
+    expect(screen.queryByLabelText("Thresholding")).toBeNull();
+    fireEvent.change(screen.getByLabelText("Threshold (% of largest detail)"), { target: { value: "25" } });
+    await waitFor(() => expect(vi.mocked(sigopDataset).mock.calls.at(-1)![0].args).toMatchObject({ rule: "percent", percent: 25, threshold: "hard" }));
+  });
+
   it("refuses the method with the install instruction when the extra is missing, and sends nothing", async () => {
     vi.mocked(waveletsStatus).mockResolvedValue({ available: false, reason: "Wavelet transforms need PyWavelets. Install it with: pip install quantized-lab[wavelets]" });
     render(<SignalProcessingPanel />);

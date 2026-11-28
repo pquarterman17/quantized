@@ -1,0 +1,158 @@
+{
+ "_doc": "Significance marks from supplied p-values (plan item 23). Input: three box groups, thresholds, flags and pairs [a, b, p] (indices into groups). Expected: the laid-out brackets the screen paints and the export posts verbatim. Read by frontend/src/components/Stage/sigMarksWire.test.ts and tests/test_sig_marks_wire.py.",
+ "groups": [
+  {
+   "label": "a",
+   "values": [
+    1,
+    2,
+    3
+   ]
+  },
+  {
+   "label": "b",
+   "values": [
+    4,
+    5,
+    6
+   ]
+  },
+  {
+   "label": "c",
+   "values": [
+    9,
+    10,
+    11
+   ]
+  }
+ ],
+ "levels": [
+  {
+   "mark": "*",
+   "below": 0.05
+  },
+  {
+   "mark": "**",
+   "below": 0.01
+  },
+  {
+   "mark": "***",
+   "below": 0.001
+  }
+ ],
+ "pairs": [
+  [
+   0,
+   1,
+   0.0004
+  ],
+  [
+   0,
+   2,
+   0.03
+  ],
+  [
+   1,
+   2,
+   0.2
+  ]
+ ],
+ "cases": [
+  {
+   "name": "stars, ns hidden",
+   "showP": false,
+   "showNs": false,
+   "brackets": [
+    {
+     "a": 0,
+     "b": 1,
+     "y": 6.348,
+     "label": "***"
+    },
+    {
+     "a": 0,
+     "b": 2,
+     "y": 11.348,
+     "label": "*"
+    }
+   ],
+   "tick": 0.232,
+   "top": 12.044
+  },
+  {
+   "name": "stars, ns shown",
+   "showP": false,
+   "showNs": true,
+   "brackets": [
+    {
+     "a": 0,
+     "b": 1,
+     "y": 6.348,
+     "label": "***"
+    },
+    {
+     "a": 1,
+     "b": 2,
+     "y": 11.348,
+     "label": "ns"
+    },
+    {
+     "a": 0,
+     "b": 2,
+     "y": 12.218,
+     "label": "*"
+    }
+   ],
+   "tick": 0.232,
+   "top": 12.914
+  },
+  {
+   "name": "p text, ns hidden",
+   "showP": true,
+   "showNs": false,
+   "brackets": [
+    {
+     "a": 0,
+     "b": 1,
+     "y": 6.348,
+     "label": "p = 0.0004"
+    },
+    {
+     "a": 0,
+     "b": 2,
+     "y": 11.348,
+     "label": "p = 0.03"
+    }
+   ],
+   "tick": 0.232,
+   "top": 12.044
+  },
+  {
+   "name": "p text, ns shown",
+   "showP": true,
+   "showNs": true,
+   "brackets": [
+    {
+     "a": 0,
+     "b": 1,
+     "y": 6.348,
+     "label": "p = 0.0004"
+    },
+    {
+     "a": 1,
+     "b": 2,
+     "y": 11.348,
+     "label": "p = 0.2"
+    },
+    {
+     "a": 0,
+     "b": 2,
+     "y": 12.218,
+     "label": "p = 0.03"
+    }
+   ],
+   "tick": 0.232,
+   "top": 12.914
+  }
+ ]
+}

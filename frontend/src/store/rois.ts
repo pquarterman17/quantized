@@ -73,6 +73,7 @@
 import { createMapViewSlice, type MapViewSlice } from "./mapView";
 import type { RsmPeak } from "../lib/types";
 import type { RoiDef, RoiRect, RoiRuler } from "../lib/roi";
+import type { RoiPolygon } from "../lib/roiPolygon";
 import type { AppState } from "./useApp";
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
@@ -124,6 +125,13 @@ export interface RoisSlice extends MapViewSlice {
    *  survive-a-dataset-switch contract as `mapRoi`. */
   mapRuler: RoiRuler | null;
   setMapRuler: (mapRuler: RoiRuler | null) => void;
+  /** The live/working polygon (lib/roiPolygon.ts): a closed outline drawn with
+   *  the map's Polygon tool. Same working-shape contract as `mapRoi`: outside
+   *  undo and the `.dwk`, survives a dataset switch, and exclusive with the box
+   *  and the ruler (setting one retires the others). Only ROI volume reads it;
+   *  every rectangle consumer refuses it with a reason. */
+  mapPolygon: RoiPolygon | null;
+  setMapPolygon: (mapPolygon: RoiPolygon | null) => void;
 
   /** Dataset-owned sector scratch state. Not persisted or undoable; it only
    * prevents concurrently visible maps from sharing incompatible q bounds. */
@@ -154,6 +162,13 @@ export interface RoisSlice extends MapViewSlice {
   removeSavedRoi: (id: string) => void;
 }
 
+/** The three working shapes, by saved-ROI kind (a saved entry keeps its shape under its kind's own name). */
+const SLOT = { rect: "mapRoi", ruler: "mapRuler", polygon: "mapPolygon" } as const;
+
+/** Set one working shape; a non-null one retires the other two (the map shows one at a time). */
+const working = (key: (typeof SLOT)[keyof typeof SLOT], v: unknown): Partial<AppState> =>
+  (v ? { mapRoi: null, mapRuler: null, mapPolygon: null, [key]: v } : { [key]: v }) as Partial<AppState>;
+
 export function createRoisSlice(set: SliceSet, get: SliceGet): RoisSlice {
   return {
     ...createMapViewSlice(set, get),
@@ -161,9 +176,11 @@ export function createRoisSlice(set: SliceSet, get: SliceGet): RoisSlice {
     setRsmPeaks: (rsmPeaks) => set({ rsmPeaks }),
 
     mapRoi: null,
-    setMapRoi: (mapRoi) => set({ mapRoi }),
+    setMapRoi: (mapRoi) => set(working("mapRoi", mapRoi)),
     mapRuler: null,
-    setMapRuler: (mapRuler) => set({ mapRuler }),
+    setMapRuler: (mapRuler) => set(working("mapRuler", mapRuler)),
+    mapPolygon: null,
+    setMapPolygon: (mapPolygon) => set(working("mapPolygon", mapPolygon)),
 
     mapSector: {},
     setMapSector: (datasetId, patch) => set((st) => ({
@@ -178,13 +195,10 @@ export function createRoisSlice(set: SliceSet, get: SliceGet): RoisSlice {
       const s = get();
       const nm = name.trim() || "Untitled ROI";
       // A box on a plain map ("map" space) has no saved form: the project file only knows the RSM spaces.
-      if (s.mapRoi?.space === "map") return null;
-      const def: RoiDef | null = s.mapRoi
-        ? { id: nextRoiId(), name: nm, kind: "rect", rect: s.mapRoi }
-        : s.mapRuler
-          ? { id: nextRoiId(), name: nm, kind: "ruler", ruler: s.mapRuler }
-          : null;
-      if (!def) return null;
+      if (s.mapRoi?.space === "map" || s.mapPolygon?.space === "map") return null; // likewise a polygon
+      const kind = s.mapRoi ? "rect" : s.mapRuler ? "ruler" : s.mapPolygon ? "polygon" : null;
+      if (!kind) return null;
+      const def = { id: nextRoiId(), name: nm, kind, [kind]: s[SLOT[kind]] } as RoiDef;
       get().recordHistory("save ROI");
       set((st) => ({ savedRois: [...st.savedRois, def] }));
       return def.id;
@@ -192,8 +206,8 @@ export function createRoisSlice(set: SliceSet, get: SliceGet): RoisSlice {
     applySavedRoi: (id) => {
       const def = get().savedRois.find((r) => r.id === id);
       if (!def) return;
-      if (def.kind === "rect") set({ mapRoi: def.rect, mapRuler: null });
-      else if (def.kind === "ruler") set({ mapRuler: def.ruler, mapRoi: null });
+      const kind = def.kind as keyof typeof SLOT;
+      if (SLOT[kind]) set(working(SLOT[kind], (def as Record<string, unknown>)[kind]));
       // kind:"sector" — see the field's own doc above; item 8 reads
       // savedRois directly for its sector card, no working-slot hand-off.
     },
