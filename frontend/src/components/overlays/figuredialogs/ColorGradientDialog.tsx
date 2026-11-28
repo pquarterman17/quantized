@@ -1,8 +1,9 @@
 // Origin's colour-list / colormap increment for the focused graph (origin gap
 // audit 4 G1): spread a continuous colormap over the graph's N curves, from the
 // first to the last, optionally reversed or ordered by the number in each
-// curve's legend (a temperature, a field). Apply is ONE undo step
-// (`setSeriesRamp`); the ramp is a per-graph setting, so it is saved with the
+// curve's legend (a temperature, a field). Apply writes and keeps the popup
+// open, OK applies and closes, Cancel closes and keeps what was applied; the
+// popup session is ONE undo step (`setSeriesRamp`, useApplySession); the ramp is a per-graph setting, so it is saved with the
 // window and carried by graph templates. The preview resolves the SAME
 // function the canvas and the export draw with (`seriesRampImpl`). Mounted in
 // the lazy `FigureDialogs` host, which owns the modal frame and focus.
@@ -17,6 +18,8 @@ import { useActiveDataset, useApp } from "../../../store/useApp";
 import { Checkbox } from "../../primitives/Checkbox";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
 import { Select } from "../../primitives";
+import ApplyButtons from "./ApplyButtons";
+import { useApplySession } from "../../../lib/useApplySession";
 
 const LABELS: Record<RampMap, string> = {
   viridis: "Viridis", plasma: "Plasma", magma: "Magma", cividis: "Cividis (CVD-safe)", coolwarm: "Cool–warm (diverging)", turbo: "Turbo (rainbow)",
@@ -47,8 +50,13 @@ export default function ColorGradientDialog({ onClose }: { onClose: () => void }
   const refused = !rampApplies({ ...view, seriesRamp: draft }, documentPinsSeriesStyles(doc), !!doc?.bindings?.encoding);
   const strip = Array.from({ length: 24 }, (_, k) => rampColor(draft, k, 24));
 
+  const inSession = useApplySession("color gradient");
+  /** Write the ramp (an unchanged one writes nothing, so it records no step). */
+  const write = (ramp: SeriesRamp | null) => {
+    if (JSON.stringify(ramp) !== JSON.stringify(stored ?? null)) inSession(() => setSeriesRamp(ramp));
+  };
   const apply = (ramp: SeriesRamp | null) => {
-    setSeriesRamp(ramp);
+    write(ramp);
     onClose();
   };
 
@@ -108,8 +116,7 @@ export default function ColorGradientDialog({ onClose }: { onClose: () => void }
       )}
       <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", marginTop: 4 }}>
         {stored && <button type="button" className="qz-btn qz-ghost" onClick={() => apply(null)}>Remove gradient</button>}
-        <button type="button" className="qz-btn" onClick={onClose}>Cancel</button>
-        <button type="button" className="qz-btn qz-primary" onClick={() => apply(draft)} disabled={!active}>Apply</button>
+        <ApplyButtons onOk={() => apply(draft)} onApply={() => write(draft)} onCancel={onClose} disabled={!active} />
       </div>
     </div>
   );

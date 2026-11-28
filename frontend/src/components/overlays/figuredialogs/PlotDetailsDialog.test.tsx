@@ -37,7 +37,7 @@ describe("Plot Details (#8)", () => {
     fireEvent.change(screen.getByLabelText("Error bar line width"), { target: { value: "2" } });
     // Nothing reaches the store before Apply.
     expect(useApp.getState().seriesStyles[1]).toEqual({ width: 2 });
-    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    fireEvent.click(screen.getByRole("button", { name: "OK" }));
     expect(useApp.getState().seriesStyles[1]).toMatchObject({
       width: 2, color: "#000000", line: "dashed", marker: true, markerShape: "square", markerFill: "hollow",
       errorBar: { cap: 4, width: 2 },

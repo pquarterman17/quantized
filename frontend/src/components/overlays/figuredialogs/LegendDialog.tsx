@@ -2,8 +2,10 @@
 // "Legend…" command / legend context menu (figure polish, audit 6 lane M):
 // show/hide, corner, and each entry's label. Labels go through
 // `setSeriesLabel`, the SAME store field the inline label editor and the
-// export read, so the legend and a vector export agree. One Apply is ONE undo
-// step. "Reset position" is the old double-click behaviour, kept here. Mounted
+// export read, so the legend and a vector export agree. Apply writes and keeps
+// the popup open, OK applies and closes, Cancel closes and keeps what was
+// applied; the popup session is ONE undo step (useApplySession). "Reset
+// position" is the old double-click behaviour, kept here. Mounted
 // in the lazy `FigureDialogs` host, which owns the modal frame and focus.
 
 import { useMemo, useState } from "react";
@@ -15,7 +17,9 @@ import { withUnit } from "../../../lib/unitDisplay";
 import { asOneEditStep } from "../../../store/undoStep";
 import { useActiveDataset, useApp, type LegendPos } from "../../../store/useApp";
 import { Checkbox } from "../../primitives/Checkbox";
+import ApplyButtons from "./ApplyButtons";
 import LegendPositionField from "./LegendPositionField";
+import { useApplySession } from "../../../lib/useApplySession";
 
 export default function LegendDialog({ onClose }: { onClose: () => void }) {
   const active = useActiveDataset();
@@ -38,8 +42,9 @@ export default function LegendDialog({ onClose }: { onClose: () => void }) {
   );
   const free = !!v.legendXY || !!v.legendFrameXY;
 
+  const inSession = useApplySession("legend formatting");
   const apply = () => {
-    asOneEditStep(useApp.getState, "legend formatting", () => {
+    inSession(() => asOneEditStep(useApp.getState, "legend formatting", () => {
       if (show !== v.showLegend) v.setShowLegend(show);
       if (pos !== v.legendPos) {
         v.setLegendPos(pos);
@@ -50,15 +55,14 @@ export default function LegendDialog({ onClose }: { onClose: () => void }) {
       for (const ch of channels) {
         if ((labels[ch] ?? "").trim() !== (v.seriesLabels[ch] ?? "")) v.setSeriesLabel(ch, labels[ch] ?? "");
       }
-    });
-    onClose();
+    }));
   };
   const resetPosition = () => {
-    asOneEditStep(useApp.getState, "reset legend position", () => {
+    inSession(() => asOneEditStep(useApp.getState, "reset legend position", () => {
       if (v.legendXY) v.setLegendPos(nearestLegendCorner(v.legendXY[0], v.legendXY[1]));
       else v.recordHistory("reset legend position");
       v.setLegendXY(null);
-    });
+    }));
     onClose();
   };
 
@@ -87,8 +91,7 @@ export default function LegendDialog({ onClose }: { onClose: () => void }) {
       <div style={{ display: "flex", gap: 6, justifyContent: "space-between", marginTop: 4 }}>
         <button type="button" className="qz-btn qz-ghost" disabled={!free} onClick={resetPosition}>Reset position</button>
         <span style={{ display: "flex", gap: 6 }}>
-          <button type="button" className="qz-btn" onClick={onClose}>Cancel</button>
-          <button type="button" className="qz-btn qz-primary" onClick={apply}>Apply</button>
+          <ApplyButtons onOk={() => { apply(); onClose(); }} onApply={apply} onCancel={onClose} />
         </span>
       </div>
     </div>

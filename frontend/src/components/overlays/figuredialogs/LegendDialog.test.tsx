@@ -34,7 +34,7 @@ describe("Legend dialog", () => {
     open();
     expect(screen.getByRole("dialog", { name: "Legend" })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Legend entry for a (V)"), { target: { value: "Moment" } });
-    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    fireEvent.click(screen.getByRole("button", { name: "OK" }));
     expect(st().seriesLabels).toEqual({ 0: "Moment" });
     expect(useFigureDialog.getState().open).toBeNull();
   });

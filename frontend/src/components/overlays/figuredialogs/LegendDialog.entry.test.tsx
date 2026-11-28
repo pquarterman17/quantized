@@ -43,7 +43,7 @@ describe("Legend popup, entered by double-clicking the legend box", () => {
     expect(screen.getByLabelText("Legend position")).toHaveValue("sw");
     fireEvent.change(screen.getByLabelText("Legend position"), { target: { value: "nw" } });
     expect(st().legendPos).toBe("sw"); // draft only until Apply
-    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    fireEvent.click(screen.getByRole("button", { name: "OK" }));
     expect(st().legendPos).toBe("nw");
     expect(st().history).toHaveLength(1);
     expect(screen.queryByRole("dialog")).toBeNull();

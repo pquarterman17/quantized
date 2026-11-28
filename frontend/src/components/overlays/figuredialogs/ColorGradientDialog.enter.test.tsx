@@ -46,3 +46,22 @@ describe("ColorGradientDialog Enter", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 });
+
+describe("ColorGradientDialog Apply and OK (plan item 44)", () => {
+  it("Apply writes and stays open; two Applies then OK are one undo step; an unchanged Apply adds none", () => {
+    useApp.setState({ history: [], future: [] });
+    const onClose = vi.fn();
+    render(<ColorGradientDialog onClose={onClose} />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Colormap" }), { target: { value: "plasma" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    expect(useApp.getState().seriesRamp).toMatchObject({ map: "plasma" });
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Apply" })); // unchanged: no write
+    fireEvent.change(screen.getByRole("combobox", { name: "Colormap" }), { target: { value: "magma" } });
+    fireEvent.click(screen.getByRole("button", { name: "OK" }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(useApp.getState().history).toHaveLength(1);
+    useApp.getState().undo();
+    expect(useApp.getState().seriesRamp).toBeNull();
+  });
+});

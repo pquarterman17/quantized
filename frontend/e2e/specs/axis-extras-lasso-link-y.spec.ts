@@ -51,7 +51,7 @@ test("probability Y with custom ticks crossing X = 0, a lasso mask, and linked Y
   await dialog.getByRole("textbox", { name: "Y axis Tick positions" }).fill("0.05, 0.5, 0.95");
   await dialog.getByRole("textbox", { name: "Y axis Tick labels" }).fill("5%, median, 95%");
   await dialog.getByRole("textbox", { name: "Y axis Cross X at" }).fill("0");
-  await dialog.getByRole("button", { name: "Apply" }).click();
+  await dialog.getByRole("button", { name: "OK" }).click();
   await expect(dialog).not.toBeVisible();
   await expect.poll(() => state(page)).toMatchObject({
     yScale: "linear",
@@ -104,7 +104,7 @@ test("probability Y with custom ticks crossing X = 0, a lasso mask, and linked Y
   const again = page.getByRole("dialog", { name: "Axis" });
   await again.getByRole("tab", { name: "Y" }).click();
   await again.getByRole("combobox", { name: "Y axis Type" }).selectOption("log");
-  await again.getByRole("button", { name: "Apply" }).click();
+  await again.getByRole("button", { name: "OK" }).click();
   await expect.poll(async () => (await state(page)).linkY.filter((g) => g === null).length).toBe(1);
   await expect(page.getByText(/Y axis unlinked/)).toBeVisible();
 });
