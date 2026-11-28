@@ -25,6 +25,7 @@ import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { lazyLineage } from "../../../lib/bookData";
 import { useLatestRef } from "../../../lib/previewKey";
+import { useGroupableActive } from "../useGroupableActive";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
 import { datasetInputsToken } from "../workbench/inputsKey";
 import { useRunStamp } from "../workbench/useRunStamp";
@@ -41,6 +42,8 @@ export interface StatsChooserState {
   /** What is analysed, under the shared input contract. */
   inputs: AnalysisInputs;
   columns: ChooserColumn[];
+  /** `columns` plus the CSV text columns that can group rows: the "Group by" choices. */
+  groupColumns: ChooserColumn[];
   mode: ChooserMode;
   setMode: (m: ChooserMode) => void;
   // columns mode
@@ -70,6 +73,13 @@ export interface StatsChooserState {
 
 export function useStatsChooser(): StatsChooserState {
   const active = useActiveDataset();
+  // The "Group by" picker also offers the sheet's CSV text columns (see useGroupableActive).
+  const grouped = useGroupableActive();
+  const groupColumns = useMemo<ChooserColumn[]>(() => {
+    if (!grouped) return [];
+    const xName = String(grouped.data.metadata?.["x_column_name"] ?? "x");
+    return [{ index: -1, label: xName }, ...grouped.data.labels.map((label, index) => ({ index, label }))];
+  }, [grouped]);
   const columns = useMemo<ChooserColumn[]>(() => {
     if (!active) return [];
     const xName = String(active.data.metadata?.["x_column_name"] ?? "x");
@@ -89,7 +99,7 @@ export function useStatsChooser(): StatsChooserState {
   );
   const [paired, setPaired] = useState(false);
   // A column added/removed under a pick follows it by label (../useFollowColumnPicks).
-  useFollowColumnPicks(active, (follow) => {
+  useFollowColumnPicks(grouped, (follow) => {
     const next = cols.map(follow).filter((c): c is number => c !== null);
     const by = follow(byCol) ?? firstCategorical(active) ?? 0;
     const value = follow(valueCol) ?? firstContinuous(active, by);
@@ -113,7 +123,7 @@ export function useStatsChooser(): StatsChooserState {
   // The shared input contract (lib/analysisInputs): the active worksheet's
   // analysis view over the columns the current mode reads. A lazy Origin
   // preview is refused here; "Recommend" still queues behind the full load.
-  const inputs = useAnalysisInputs({ noX: true, yKeys: mode === "columns" ? cols : [valueCol, byCol], policy: ROW_POLICY.analysisView });
+  const inputs = useAnalysisInputs({ noX: true, yKeys: mode === "columns" ? cols : [valueCol, byCol], policy: ROW_POLICY.analysisView, textGroups: true });
   const data = inputs.ok ? inputs.data : null;
 
   const groups = useMemo<GroupSpec[]>(() => {
@@ -126,7 +136,7 @@ export function useStatsChooser(): StatsChooserState {
   const pairable =
     groups.length === 2 && groups[0].values.length === groups[1].values.length;
   const byIsCategorical =
-    !!active && byCol >= 0 && isCategorical(channelModelingType(active, byCol));
+    !!grouped && byCol >= 0 && isCategorical(channelModelingType(grouped, byCol));
 
   const toggleCol = (i: number) =>
     setCols((c) => (c.includes(i) ? c.filter((x) => x !== i) : [...c, i]));
@@ -277,6 +287,7 @@ export function useStatsChooser(): StatsChooserState {
     active,
     inputs,
     columns,
+    groupColumns,
     mode,
     setMode: (m) => {
       setMode(m);

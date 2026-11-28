@@ -18,6 +18,7 @@ import numpy as np
 from pydantic import BaseModel, Field
 
 from quantized.calc.axis_categories import x_category_labels
+from quantized.datastruct import is_categorical, level_of
 from quantized.heavy_import import heavy_imports
 from quantized.routes.export_figures_facets import _request_dataset
 from quantized.routes.export_figures_polar import _xy_only_fields
@@ -146,6 +147,9 @@ def render_plots2_request(req: FigureRequest, *, fmt: str, dpi: int) -> bytes:
     texts = _categories(ds, p.cat_col)
     if texts is not None:
         labels = [texts[int(c) - 1] if np.isfinite(c) and 1 <= c <= len(texts) else "" for c in cat]
+    elif p.cat_col >= 1 and is_categorical(ds, p.cat_col - 1):
+        # A categorical CHANNEL (a text column of the sheet): its level text, not its code.
+        labels = [level_of(ds, p.cat_col - 1, float(c)) or "" for c in cat]
     else:
         labels = [f"{c:g}" if np.isfinite(c) else "" for c in cat]
     pairs = [(lab, v) for lab, v in zip(labels, val, strict=True) if lab != "" and np.isfinite(v)]

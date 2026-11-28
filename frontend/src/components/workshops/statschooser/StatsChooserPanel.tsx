@@ -21,6 +21,7 @@ export default function StatsChooserPanel() {
   const setOpen = useApp((s) => s.setStatsChooserOpen);
   const c = useStatsChooser();
   const colOptions = c.columns.map((col) => ({ value: String(col.index), label: col.label }));
+  const byOptions = c.groupColumns.map((col) => ({ value: String(col.index), label: col.label }));
   const faint = { color: "var(--text-faint)" } as const;
 
   return (
@@ -65,7 +66,7 @@ export default function StatsChooserPanel() {
                 Group by
               </label>
               <Select
-                options={colOptions}
+                options={byOptions}
                 value={String(c.byCol)}
                 onChange={(e) => c.setByCol(Number(e.target.value))}
               />

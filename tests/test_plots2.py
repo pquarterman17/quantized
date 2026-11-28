@@ -179,6 +179,23 @@ def test_export_route_pareto_text_categories() -> None:
     assert r.status_code == 422 and "non-negative" in r.text
 
 
+def test_export_route_pareto_categorical_channel() -> None:
+    """A categorical CHANNEL (a text column of a CSV) is labelled by its level text, not its code.
+
+    pandas: ``df.groupby("grp")["val"].sum()`` -> alpha 39, beta 156, so beta is the taller bar
+    and comes first.
+    """
+    grp = ["alpha"] * 6 + ["beta"] * 6
+    val = [1, 2, 3, 10, 11, 12, 20, 21, 22, 30, 31, 32]
+    rows = [[float(v), 0.0 if g == "alpha" else 1.0] for v, g in zip(val, grp, strict=True)]
+    ds = {"time": list(range(1, 13)), "values": rows, "labels": ["val", "grp"], "units": ["", ""],
+          "metadata": {}, "cat_levels": {"1": ["alpha", "beta"]}}
+    r = _post({"kind": "pareto", "cat_col": 2, "value_col": 1}, ds)
+    assert r.status_code == 200, r.text
+    assert r.content.find(b"beta") != -1 and r.content.find(b"alpha") != -1
+    assert r.content.find(b"beta") < r.content.find(b"alpha")
+
+
 def test_export_route_refuses() -> None:
     assert _post({"kind": "parallel", "cols": [1]}).status_code == 422
     assert _post({"kind": "parallel", "cols": [1, 1]}).status_code == 422

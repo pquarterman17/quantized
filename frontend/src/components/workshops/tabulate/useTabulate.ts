@@ -31,10 +31,12 @@ import { toast } from "../../../store/toasts";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { rowsAreSampled } from "../../../lib/rowSidecars";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { withTextGroupChannels } from "../../../lib/groupableColumns";
+import { useGroupableActive } from "../useGroupableActive";
 import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
-import { seedNumbers, useReopenSeed } from "../resultcommit/useReopenSession";
+import { useReopenSeed } from "../resultcommit/useReopenSession";
 import { tabulateOutput } from "./tabulateExport";
-import { colValues, firstCategorical, firstContinuous, moveInArray } from "./tabulateColumns";
+import { colValues, firstCategorical, firstContinuous, moveInArray, seedPicks } from "./tabulateColumns";
 
 const TABULATE_PRODUCER = { id: "tabulate", label: "Tabulate", version: 1 } as const;
 
@@ -121,6 +123,9 @@ export interface TabulateLayout {
 
 export function useTabulate(): TabulateState {
   const active = useActiveDataset();
+  // The same sheet with its CSV text columns appended as group columns (see useGroupableActive).
+  // Columns, picks and rows read it; the commit's source and fingerprint stay on `active`.
+  const grouped = useGroupableActive();
   const setStatus = useApp((s) => s.setStatus);
   const [reportBusy, setReportBusy] = useState(false);
 
@@ -128,25 +133,25 @@ export function useTabulate(): TabulateState {
   // worksheet's (guard #11 — read rows only through lib/rowstate).
   // Narrowed to the row range set on the worksheet, which the input line states.
   const rowRange = useRowRangeOf(active?.id);
-  const data = useMemo(() => rangedAnalysisView(active, rowRange).data, [active, rowRange]);
+  const data = useMemo(() => rangedAnalysisView(grouped, rowRange).data, [grouped, rowRange]);
 
   const columns = useMemo<TabulateColumn[]>(() => {
-    if (!active) return [];
-    const xName = String(active.data.metadata?.["x_column_name"] ?? "x");
+    if (!grouped) return [];
+    const xName = String(grouped.data.metadata?.["x_column_name"] ?? "x");
     return [
       { index: -1, label: xName },
-      ...active.data.labels.map((lab, i) => ({ index: i, label: lab })),
+      ...grouped.data.labels.map((lab, i) => ({ index: i, label: lab })),
     ];
-  }, [active]);
+  }, [grouped]);
 
   // Defaults mirror v1: group by the first categorical channel (else the
   // first channel); value = the first continuous channel that isn't grouped.
   // "Open in Tabulate" (lane RO) starts from the recorded layout instead.
   const seed = useReopenSeed(TABULATE_PRODUCER.id, active?.id)?.settings;
-  const [groupCols, setGroupCols] = useState<number[]>(() => seedNumbers(seed?.groupCols, [firstCategorical(active) ?? 0]));
-  const [valueCols, setValueCols] = useState<number[]>(() => seedNumbers(seed?.valueCols, [
+  const [groupCols, setGroupCols] = useState<number[]>(() => seedPicks(seed?.groupCols, seed?.groupLabels, [firstCategorical(active) ?? 0], grouped, active));
+  const [valueCols, setValueCols] = useState<number[]>(() => seedPicks(seed?.valueCols, seed?.valueLabels, [
     firstContinuous(active, [firstCategorical(active) ?? 0]),
-  ]));
+  ], grouped, active));
   const [statKeys, setStatKeys] = useState<StatKey[]>(() => {
     const recorded = Array.isArray(seed?.statKeys) ? seed.statKeys : null;
     return recorded ? STAT_KEYS.filter((key) => recorded.includes(key)) : [...DEFAULT_STAT_KEYS];
@@ -183,7 +188,7 @@ export function useTabulate(): TabulateState {
   const groupLabels = groupCols.map(labelOf);
   const valueLabels = valueCols.map(labelOf);
   const groupIsCategorical =
-    !!active && groupCols.every((c) => c >= 0 && isCategorical(channelModelingType(active, c)));
+    !!grouped && groupCols.every((c) => c >= 0 && isCategorical(channelModelingType(grouped, c)));
 
   function levelLabel(row: TabRow, depth: number): string {
     if (row.isTotal) return depth === 0 ? "Total" : "";
@@ -244,7 +249,7 @@ export function useTabulate(): TabulateState {
     producer: TABULATE_PRODUCER,
     sourceId: active.id,
     computedOn: analysisDataFingerprint(active),
-    settings: { groupCols, valueCols, statKeys, grandTotal, rows: dataRows.length },
+    settings: { groupCols, valueCols, groupLabels, valueLabels, statKeys, grandTotal, rows: dataRows.length },
     status: `tabulated ${valueLabels.join(", ")} by ${groupLabels.join(" × ")} (${dataRows.length} rows)`,
     output: () => tabulateOutput(dataRows, groupCols, valueCols, statKeys, groupLabels, labelOf),
   } : null);
@@ -274,7 +279,7 @@ export function useTabulate(): TabulateState {
   }
 
   function tsvForDataset(source: Dataset): { text: string; rows: number } | null {
-    const resolved = rangedAnalysisView(source, rowRangeOn(source.id)).data;
+    const resolved = rangedAnalysisView(withTextGroupChannels(source), rowRangeOn(source.id)).data;
     if (!resolved) return null;
     const resolvedRows = tabulateNested(
       groupCols.map((c) => colValues(resolved, c)),
