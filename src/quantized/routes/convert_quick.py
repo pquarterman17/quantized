@@ -59,6 +59,9 @@ FORMAT_LABELS = {
     "mat": "MATLAB (.mat)",
     "json": "JSON (.json)",
     "npz": "NumPy (.npz)",
+    "sqlite": "SQLite (.sqlite)",
+    "xml": "XML (.xml)",
+    "nc": "NetCDF (.nc)",
 }
 _STAGE_NAME = "qz-convert-stage"
 

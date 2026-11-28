@@ -71,6 +71,9 @@ def test_config_lists_formats_and_prefill(
         "mat",
         "json",
         "npz",
+        "sqlite",
+        "xml",
+        "nc",
     ]
     assert {f["id"]: f["container"] for f in cfg["formats"]}["csv"] is False
     assert cfg["prefill"] == ["/a/b.dat"]  # a malformed item is dropped, not raised

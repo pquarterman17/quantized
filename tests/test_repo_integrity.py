@@ -397,7 +397,10 @@ CODEQL_NOTE_SITES = {
 
 # The one module allowed to execute SQL. `py/sql-injection` is excluded
 # repo-wide, so a second connector would inherit that silence for free.
-SQL_EXECUTING_MODULES = {"io/sqlite_query.py"}
+# io/convert_sqlite.py only WRITES a new database (reviewed 2026-11-27): every value is a bound
+# parameter and the only interpolated text is an identifier made from a dataset or channel label,
+# double-quoted with embedded quotes doubled (a hostile label is tested).
+SQL_EXECUTING_MODULES = {"io/sqlite_query.py", "io/convert_sqlite.py"}
 
 
 def _excluded_query_ids() -> set[str]:
