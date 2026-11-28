@@ -53,7 +53,8 @@ function Controls({ st }: { st: StatStageState }) {
             <Select options={groupOptions} value={split ? String(st.groupCol) : "none"} onChange={(e) => pick(e.target.value)} />
           </Picker>
         )}
-        {split && <StatFacetPicker st={st} />}
+        {/* A plain histogram draws per facet panel too: offer the pick, and keep it visible while a facet is set. */}
+        {(split || st.categoricalCols.length > 0 || st.facetCol != null) && <StatFacetPicker st={st} />}
         {(st.histCols.length > 0 || split) && (
           <Checkbox checked={d.histStack} onChange={(v) => st.setDist2({ histStack: v })} title="Stack the series on the shared bins">
             stack

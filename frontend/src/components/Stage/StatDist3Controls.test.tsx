@@ -110,14 +110,22 @@ describe("facet by on the variants (item 20)", () => {
     expect(st.setFacetCol).toHaveBeenCalledWith(2);
   });
 
-  it("a split histogram offers it too; a plain histogram does not", () => {
+  it("a split histogram offers it too, and so does a plain one (U-a)", () => {
     const split = withCols({ mode: "histogram", groupCol: 3 });
     split.dist2 = { ...split.dist2, histSplit: true };
     const { unmount } = render(<StatDist3Controls st={split} />);
     expect(screen.getByLabelText("facet by")).toBeTruthy();
     unmount();
-    render(<StatDist3Controls st={withCols({ mode: "histogram" })} />);
-    expect(screen.queryByLabelText("facet by")).toBeNull();
+    const plain = withCols({ mode: "histogram" });
+    render(<StatDist3Controls st={plain} />);
+    fireEvent.change(screen.getByLabelText("facet by"), { target: { value: "3" } });
+    expect(plain.setFacetCol).toHaveBeenCalledWith(3);
+  });
+
+  it("a facet set elsewhere stays visible, and clearable, in plain histogram mode", () => {
+    const st = withCols({ mode: "histogram", facetCol: 3, categoricalCols: [] });
+    render(<StatDist3Controls st={st} />);
+    expect(screen.getByLabelText("facet by")).toBeTruthy();
   });
 
   it("a facet column is no longer called ignored", () => {
