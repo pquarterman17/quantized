@@ -332,6 +332,10 @@ export interface ComputedColumn extends SheetLinked {
   recode?: RecodeSpec;
   factor?: FactorSpec; // P2.5: a metadata field promoted to a per-row factor (lib/metadataFactor.ts)
   derived?: DerivedSpec; // P2.5: derived unit / fitted values / propagated σ (lib/derivedColumn.ts)
+  /** Item 33: one half of the real / imaginary pair Set Column Values writes from one complex
+   *  expression; the two halves share `id`. Only a plot menu reads it (lib/complexPair.ts), and
+   *  only after re-checking that both formulas still come from one expression. */
+  pair?: { id: string; part: "re" | "im" };
 }
 
 /** One column's non-destructive filter predicate (#53). `col` is -1 for x, 0..

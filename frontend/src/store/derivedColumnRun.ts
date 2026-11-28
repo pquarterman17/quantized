@@ -107,7 +107,7 @@ export async function addDerivedColumn(
       const target = formulaLetter(ds.data.labels.length, count, count + i);
       const linked = linkSheets(get, id, c.expr, undefined, undefined, target);
       if ("error" in linked) return { ok: false, error: linked.error };
-      added.push({ ...c, deps: referencedColumns(c.expr).letters, ...(linked.sheets ? { sheets: linked.sheets } : {}), ...(linked.ranges ? { ranges: linked.ranges } : {}) });
+      added.push({ ...c, ...(req.pair && i === 0 ? { pair: req.pair } : {}), deps: referencedColumns(c.expr).letters, ...(linked.sheets ? { sheets: linked.sheets } : {}), ...(linked.ranges ? { ranges: linked.ranges } : {}) });
     }
     for (const [i, c] of added.entries()) {
       const to = recalcNodes.column(id, formulaLetter(ds.data.labels.length, count, count + i));

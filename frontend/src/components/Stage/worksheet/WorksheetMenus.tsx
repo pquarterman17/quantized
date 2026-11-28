@@ -34,6 +34,7 @@ import { columnViewItems, type ColumnViewControls } from "./columnViewMenu";
 import { columnEditItems, rowEditItems, type ColumnMove } from "./worksheetEditMenus";
 import { columnMenuItems, rowMenuItems } from "./worksheetMenuModel";
 import { cellBlockItems } from "./cellMenu";
+import { complexPairItems } from "./complexPairMenu";
 import { rowSelectionItems } from "./rowSelectionMenu";
 import { cellNoteItems } from "./cellNoteMenu";
 import { mirrorCellItems, mirrorHeaderItems } from "./mirrorMenu";
@@ -156,6 +157,7 @@ function columnItems(
               ),
           }),
     }),
+    ...(readOnly ? [] : complexPairItems(ds, col, view)),
     ...(readOnly || targets.every((c) => c < 0)
       ? []
       : [
