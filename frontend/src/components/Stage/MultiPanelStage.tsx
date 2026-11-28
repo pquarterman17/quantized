@@ -205,7 +205,7 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
   return (
     <div className="qzk-stage">
       <div ref={hostRef} style={hostStyle} />
-      <PlotRowRangeChip drawsEvery={false} note={otherSheets ? "panels of other sheets draw every row" : undefined} />
+      <PlotRowRangeChip alt note={otherSheets ? "panels of other sheets draw every row" : undefined} />
       {showLegend
         ? spatialLegends.map((legend) =>
             createPortal(

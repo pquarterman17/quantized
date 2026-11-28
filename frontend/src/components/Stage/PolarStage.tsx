@@ -51,7 +51,7 @@ export default function PolarStage() {
           ✺
         </button>
       </div>
-      <PlotRowRangeChip drawsEvery={mapMode} />
+      <PlotRowRangeChip alt />
       {!active && (
         <div className="qzk-ds-meta" style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center" }}>
           Select a dataset to plot

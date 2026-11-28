@@ -2,6 +2,7 @@
 // figures so users can tell an editable plot from an export-preview artifact.
 import { useState } from "react";
 
+import { frozenRangeNote } from "../../lib/figureRangeFrozen";
 import { pagesReferencingFigure } from "../../lib/pageDocumentActions";
 import { onLoadFailure, runLazy } from "../../lib/runLazy";
 import { transformProvenanceOfData, transformProvenanceOfDataset, transformRecipeLabel } from "../../lib/transformProvenance";
@@ -72,6 +73,7 @@ export default function EditableFiguresSection() {
               >
                 {dataset?.name ?? "unbound"}
                 {transformProvenance ? ` · ${transformProvenance.recipe} r${transformProvenance.revision}` : ""}
+                {frozenRangeNote(document) ? ` · ${frozenRangeNote(document)}` : ""}
               </span>
             </button>
             <button

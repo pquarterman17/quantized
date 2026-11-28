@@ -19,7 +19,7 @@ import type { Dataset } from "../lib/types";
 import { deriveWorkbooks, type WorkbookNode } from "../lib/workbooks";
 import { trashEntryId, type DatasetTrashEntry, type FolderTrashMember, type RestoreResult, type TrashEntry } from "./trash";
 import type { AppState } from "./useApp";
-import { restoreNamedRanges } from "./trashNamedRanges";
+import { refreshRestoredReaders, restoreNamedRanges } from "./trashNamedRanges";
 import { nextWorkbookId } from "./workbookIds";
 
 /** Shared by the standalone `dataset`-kind restore AND the dependency-aware
@@ -73,9 +73,14 @@ export function restoreDatasetInto(
   }
   const mapViews =
     mapView && !(dataset.id in s.mapViews) ? { ...s.mapViews, [dataset.id]: mapView } : s.mapViews;
-  const allDatasets = [...s.datasets, restored];
-  const ranges = restoreNamedRanges(s.namedRanges, namedRanges, restored, allDatasets, workbooks);
-  return { dataset: restored, datasets: allDatasets, workbooks, expandedWorkbookIds, mapViews, namedRanges: ranges.namedRanges, rangeNote: ranges.note };
+  const withSheet = [...s.datasets, restored];
+  const ranges = restoreNamedRanges(s.namedRanges, namedRanges, restored, withSheet, workbooks);
+  // The formulas of OTHER sheets that errored when these ranges went read them again, in this same transaction.
+  const readers = refreshRestoredReaders(withSheet, ranges.namedRanges, ranges.restoredIds, restored.id);
+  const rangeNote = readers.elsewhere
+    ? `${ranges.note ?? ""}${ranges.note ? "; " : ""}${readers.elsewhere} formula column${readers.elsewhere === 1 ? "" : "s"} on other sheets read ${readers.elsewhere === 1 ? "it" : "them"} again`
+    : ranges.note;
+  return { dataset: restored, datasets: readers.datasets, workbooks, expandedWorkbookIds, mapViews, namedRanges: ranges.namedRanges, rangeNote };
 }
 
 /** Restoring a live-mode `editableFigure`/`figureDoc` whose bound dataset is

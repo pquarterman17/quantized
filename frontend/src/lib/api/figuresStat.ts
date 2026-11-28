@@ -13,7 +13,7 @@ import { postDownload } from "./http";
  *  falls back to the request's own top-level `kind`. */
 export interface StatplotFacetSpec {
   label: string;
-  kind?: "box" | "violin" | "strip";
+  kind?: StatplotFigureSpec["kind"];
   data: number[][];
   labels?: string[] | null;
   /** Review finding 2: this panel's own canvas y-domain (box only — see
@@ -36,6 +36,9 @@ export interface StatplotFacetSpec {
   /** P1.4 Color-by: each group's colour level (null: by position), with the
    *  request's `palette` (lib/statColor). */
   color_levels?: (number | null)[] | null;
+  /** Item 20: this panel's own variant options (half / split violin layout, paired, lollipop, a stacked
+   *  histogram), as `StatplotFigureSpec.dist3` carries them for one flat plot. */
+  dist3?: StatplotFigureSpec["dist3"];
 }
 
 /** A statistical-plot export request (StatStage's "Export figure" button):

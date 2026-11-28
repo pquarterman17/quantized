@@ -5,18 +5,12 @@
 
 import { effectiveChannels } from "../../lib/plotdata";
 import { liveSelectedRows, type SlicePlan } from "../../lib/plotSlice";
-import { dropChannels, subsetSeries, type SubsetDestination } from "../../lib/subsetColumns";
-import type { Dataset } from "../../lib/types";
 import { excludedSet, filteredOutSet } from "../../lib/rowstate";
 import { applyViewFilter } from "../../store/graphBrowserActions";
-import { useApp } from "../../store/useApp";
-import { nextWorkbookId } from "../../store/workbookIds";
 import { toast } from "../../store/toasts";
-import { openWorksheet } from "../../store/worksheetOpen";
 import type { AppState } from "../../store/useApp";
-import { askSubsetChoices } from "./subsetRegionDialog";
+import { subsetWithChoices } from "./subsetWithChoices";
 import { describeExtract, planExtract } from "./worksheet/extractRows";
-import { commitExtract } from "./worksheet/extractRowsCommit";
 
 /** The live store snapshot, passed in by the menu (a component file must not reach for the store itself). */
 type Get = () => AppState;
@@ -43,34 +37,5 @@ export async function createSubsetFromRegion(get: Get): Promise<void> {
   const plan = planExtract(ds.data, rows);
   if (!plan) return s.setStatus(describeExtract(plan, ds.data.time.length));
   const plotted = effectiveChannels(ds.data, s.yKeys, s.xKey, ds.channelRoles, s.seriesOrder).filter((c) => !s.hiddenChannels.includes(c));
-  const sourceBook = ds.workbookId ? s.workbooks.find((w) => w.id === ds.workbookId)?.name ?? null : null;
-  const choices = await askSubsetChoices(subsetSeries(ds.data, plotted, plan.rows), s.workbooks.filter((w) => w.id !== ds.workbookId), sourceBook, plan.extracted);
-  if (!choices) return;
-  if (plotted.length > 0 && choices.keep.length === 0) return s.setStatus("subset not created: tick at least one series", "danger");
-  const dropped = dropChannels(plan.data, new Set(plotted.filter((c) => !choices.keep.includes(c))));
-  if ("refusal" in dropped) return s.setStatus(`subset not created: ${dropped.refusal}`, "danger");
-  const where = landing(get, ds, choices.destination);
-  let added: string | null = null;
-  const stopped = commitExtract(ds, { ...plan, data: dropped.data }, (id) => get().datasets.find((d) => d.id === id)?.name, { quiet: true, onAdded: (id) => { added = id; where.made?.(); }, patch: where.patch });
-  if (stopped) return s.setStatus(stopped.status, stopped.tone);
-  s.setStatus(describeExtract(plan, ds.data.time.length));
-  if (added) toast("subset created beside its source", "ok", { action: { label: "Open", onClick: () => openWorksheet({ datasetId: added! }) } });
-}
-
-/** The workbook (and folder) the new subset joins: the source's, another existing one, or a new one made right after the subset is
- *  added, so the subset's one undo step takes it away too (its history snapshot predates both). */
-function landing(get: Get, source: Dataset, destination: SubsetDestination): { patch?: Partial<Dataset>; made?: () => void } {
-  if (destination.kind === "workbook") {
-    const book = get().workbooks.find((w) => w.id === destination.id);
-    return book ? { patch: { workbookId: book.id, ...(book.folderId ? { folderId: book.folderId } : {}) } } : {};
-  }
-  if (destination.kind === "new") {
-    const id = nextWorkbookId();
-    const name = `${source.name.replace(/\.[^.]+$/, "")} (subset)`;
-    return {
-      patch: { workbookId: id, ...(source.folderId ? { folderId: source.folderId } : {}) },
-      made: () => useApp.setState((st) => ({ workbooks: [...st.workbooks, { id, name, ...(source.folderId ? { folderId: source.folderId } : {}) }] })),
-    };
-  }
-  return source.workbookId ? { patch: { workbookId: source.workbookId, ...(source.folderId ? { folderId: source.folderId } : {}) } } : {};
+  await subsetWithChoices(get, ds, plan, plotted, true);
 }

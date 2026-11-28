@@ -206,7 +206,7 @@ describe("a fit run from a named range", () => {
 
     // The saved result carries the window AND the name it was read through.
     const saved = snapshotSaveRange("fit-model", useApp.getState().datasets[0], "this fit");
-    expect(saved.range).toEqual({ from: 20, to: 43, rows: N, name: "Window" });
+    expect(saved.range).toEqual({ from: 20, to: 43, rows: N, name: "Window", rangeId: "nr1:w" });
     expect(savedInputRowsLine({ rowRange: saved.range })).toBe("rows 21-44 of 60 (named range Window) (when saved)");
 
     // Retarget the name to rows 6-15 and fit again: the input followed, no re-pick.
