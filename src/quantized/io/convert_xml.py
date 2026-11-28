@@ -23,7 +23,6 @@ Characters XML 1.0 cannot hold are removed from text. Pure ``io``.
 from __future__ import annotations
 
 import json
-import re
 import xml.etree.ElementTree as ET  # noqa: S405 - used to WRITE, never to parse
 from collections.abc import Sequence
 from pathlib import Path
@@ -36,11 +35,13 @@ from quantized.x_units import x_unit_of
 
 __all__ = ["write_xml"]
 
-_ILLEGAL = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f￾￿]")
+# XML 1.0 forbids the C0 controls other than tab, LF and CR, and U+FFFE / U+FFFF.
+# A translate table (not a regex character range) drops them.
+_ILLEGAL = dict.fromkeys([*range(0x00, 0x09), 0x0B, 0x0C, *range(0x0E, 0x20), 0xFFFE, 0xFFFF])
 
 
 def _clean(text: str) -> str:
-    return _ILLEGAL.sub("", text.encode("utf-8", "replace").decode("utf-8"))
+    return text.encode("utf-8", "replace").decode("utf-8").translate(_ILLEGAL)
 
 
 def _numbers(column: np.ndarray) -> str:
