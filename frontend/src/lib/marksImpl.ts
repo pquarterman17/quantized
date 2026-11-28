@@ -51,9 +51,9 @@ export function sizeScatterPlugin(specs: Map<number, ColorScatterSpec>): uPlot.P
             const y = ys[i];
             const d = spec.diam[i];
             if (x == null || y == null || d == null) continue;
-            const fill = spec.flat ? flat : colorScatterFill(spec, i);
+            const fill = colorScatterFill(spec, i) ?? (spec.flat ? flat : null); // G24: a row's own colour wins; a size-only series keeps its stroke
             if (fill === null) continue;
-            paintColorPoint(ctx, u.valToPos(x, "x", true), u.valToPos(y, scaleKey, true), (d / 2) * k, fill, spec.shape, spec.hollow);
+            paintColorPoint(ctx, u.valToPos(x, "x", true), u.valToPos(y, scaleKey, true), (d / 2) * k, fill, spec.shapes?.[i] ?? spec.shape, spec.hollow);
           }
         }
         drawSizeKey(u, shown); // a legend-hidden series takes its key with it

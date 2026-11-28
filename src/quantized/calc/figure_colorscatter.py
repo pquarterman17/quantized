@@ -167,17 +167,34 @@ def draw_color_scatter(
     diam = size_diameters(spec, n)  # N5: marker size from a column
     if diam is not None:
         size = np.asarray(np.where(np.isfinite(diam), diam, 0.0) ** 2, dtype=float)
-    if spec.get("color_stops") and spec.get("color_lim"):
+    text = spec.get("marker_text") is not None or spec.get("marker_texts") is not None
+    # G24 row states on a colour-by series (a text-symbol series draws only its text). The
+    # imports are lazy because both modules import this one.
+    with heavy_imports(
+        "quantized.calc.figure_colorscatter_rows", "quantized.calc.figure_row_states"
+    ):
+        from quantized.calc.figure_colorscatter_rows import draw_row_state_scatter
+        from quantized.calc.figure_row_states import row_states
+
+    states = None if text else row_states(spec, len(xv))
+    if states is not None:
+        out = draw_row_state_scatter(
+            fig, ax, xv[:n], yv[:n], z[:n], label, spec, size, states, diam
+        )
+    elif spec.get("color_stops") and spec.get("color_lim"):
         out = _draw_gradient(fig, ax, xv[:n], yv[:n], z[:n], label, spec, size)
     else:
         cmap = str(spec.get("colormap") or "viridis")
         out = ax.scatter(xv[:n], yv[:n], c=z[:n], cmap=cmap, s=size, label=label)
         fig.colorbar(out, ax=ax)
     if diam is not None:
-        tag_bubbles(out, diam)
+        if states is None:  # the row-state draw tags each of its own collections
+            tag_bubbles(out, diam)
         add_size_legend(ax, spec, "0.35", "o")
     if spec.get("marker_text") is not None or spec.get("marker_texts") is not None:
         # Plan item 24: the text replaces the dots, in the series colour as the canvas draws it.
         apply_point_texts(ax, out, xv, yv, spec, spec.get("color") or "0.35")
         return out
-    return out if spec.get("color_stops") and spec.get("color_lim") else _hollow(out, spec)
+    if states is not None or (spec.get("color_stops") and spec.get("color_lim")):
+        return out
+    return _hollow(out, spec)

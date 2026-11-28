@@ -123,12 +123,12 @@ describe("the option is OFF by default: existing figures are unchanged", () => {
     expect(none.row_colors).toBeUndefined();
   });
 
-  it("a series with a colour-by or size-by keeps that and takes no row states, on both sides", () => {
+  it("a colour-by or size-by series with nothing drawn (no base spec) gets no canvas row states", () => {
+    // With a base spec the row states lay over it (rowStateColorBy.test.ts); an empty column draws plain.
     const ds = dataset();
     const base = new Map<number, ColorScatterSpec>();
     expect(withRowStates(base, ds, [1], styles({ colorBy: 0 }))).toBe(base);
     expect(withRowStates(base, ds, [1], styles({ sizeBy: 0 }))).toBe(base);
-    expect((request(ds, styles({ colorBy: 0 })).series_styles?.[0] as RowStateWire).row_colors).toBeUndefined();
   });
 
   it("without a live dataset (a frozen document) no row arrays are sent", () => {

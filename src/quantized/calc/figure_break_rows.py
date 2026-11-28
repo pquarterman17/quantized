@@ -28,7 +28,12 @@ RowStates = tuple[list[str | None] | None, list[str | None] | None]
 
 
 def panel_row_states(spec: Mapping[str, Any] | None, rows: int) -> RowStates | None:
-    """The usable row states of a series over the request's ``rows`` rows, or None."""
+    """The usable row states of a series over the request's ``rows`` rows, or None.
+
+    A colour-by or size-by series is drawn plain in a break panel (neither is drawn there, on
+    screen or on paper), so it takes no row states here either."""
+    if spec and (spec.get("color_by") is not None or spec.get("size_by") is not None):
+        return None
     return row_states(spec, rows)
 
 
