@@ -40,6 +40,7 @@ from quantized.calc.figure_series_rug import draw_series_rug, rug_mode
 from quantized.calc.figure_sizes import add_size_legend, size_diameters
 from quantized.calc.figure_stack_totals import draw_stack_totals
 from quantized.calc.figure_symbols import apply_symbol_details
+from quantized.calc.figure_text_symbols import TEXT_SWATCH_ATTR
 from quantized.calc.figure_warnings import note_figure_warning
 from quantized.heavy_import import heavy_imports
 
@@ -210,7 +211,8 @@ def _draw_marked(
     (line,) = ax.plot(px, py, label=label, **kw)
     apply_symbol_details(line, spec)  # gap audit 4 G10: edge / fill / opacity / every N
     apply_line_style(line, spec)  # plan item 17: gap to symbol / line in front / double line
-    if mark is None and sizes is None and rows is None:  # rows / bubbles draw their own points
+    texted = getattr(line, TEXT_SWATCH_ATTR, None) is not None  # a text symbol already marks every point
+    if mark is None and sizes is None and rows is None and not texted:  # rows / bubbles draw their own points
         mark_isolated(ax, line, px, py)
     color = line.get_color()
     if sizes is not None:

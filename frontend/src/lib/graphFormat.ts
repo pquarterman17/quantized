@@ -17,7 +17,7 @@ import type { ExportSeriesStyle } from "./publicationStyles";
 import type { SeriesStyle } from "./seriesStyleTypes";
 import { sanitizeSeriesRamp, type SeriesRamp } from "./seriesRamp";
 import { cleanLineStyle, validLength } from "./lineStyleSanitize";
-import { cleanSymbols, validAlpha, validEvery, validText, validTextSize } from "./symbolSanitize";
+import { cleanSymbols, portableTextFrom, validAlpha, validEvery, validText, validTextSize } from "./symbolSanitize";
 import { captureMultiY, multiYPatch, sanitizeMultiY, type GraphFormatMultiY } from "./graphFormatMultiY";
 import { sanitizeAxisExtras, type AxisFormat, type AxisScale } from "./types";
 
@@ -50,6 +50,7 @@ export interface GraphFormat extends GraphFormatFields, GraphFormatMultiY {
 export function portableStyle(style: SeriesStyle | undefined): SeriesStyle | null {
   if (!style) return null;
   const { colorBy: _colorBy, colormap: _colormap, sizeBy: _sizeBy, fill, ...rest } = style;
+  if (typeof rest.markerTextFrom === "number") delete rest.markerTextFrom; // a column INDEX means nothing on another sheet (item 24)
   void _colorBy;
   void _colormap;
   void _sizeBy;
@@ -216,6 +217,8 @@ export function seriesStyleFromExport(style: ExportSeriesStyle | null): SeriesSt
   if (validAlpha(style.marker_alpha)) out.markerAlpha = style.marker_alpha;
   if (validEvery(style.marker_every)) out.markerEvery = style.marker_every;
   if (validText(style.marker_text)) Object.assign(out, { markerText: style.marker_text, ...(validTextSize(style.marker_text_size) ? { markerTextSize: style.marker_text_size } : {}) }); // item 24
+  const from = portableTextFrom(style.marker_text_from);
+  if (from) out.markerTextFrom = from; // item 24
   if (validLength(style.symbol_gap)) out.symbolGap = style.symbol_gap; // plan item 17
   if (validLength(style.double_line)) out.doubleLine = style.double_line;
   if (style.line_front === true) out.lineFront = true;

@@ -44,6 +44,7 @@ import { droppedRows, pruneToLiveDataset } from "./rowstate";
 import { breakCompositionFromData } from "./facet";
 import { facetSplitChannels } from "./facetDomains";
 import { pointLabelsOverride } from "./figurePointLabels";
+import { marks } from "./marksLoader";
 import { perSeriesXSpec } from "./figureSpecPerSeriesX";
 // The screen-parity override projection moved to lib/figureViewOverrides.ts to
 // fund P3.3 against the 500-line ceiling. Imported, NOT re-exported (no barrel pulling it in).
@@ -197,6 +198,7 @@ function buildFigureSpecForView(
     encoding?: FigureEncoding;
   } = {},
 ): FigureSpec {
+  const textSrc = extras.liveDataset; // item 24: per-point texts number the SHEET's rows, before any window or per-series-X view
   [data, extras] = windowFigureInputs(st, data, extras); // the plot's row window: the figure holds the rows the canvas draws, facet grid and axis break panels included (lib/figureRowRange.ts)
   // Gap audit 4 G1: the colour gradient first, on the SOURCE channels, as on screen.
   st = rampView(st, data, channelRoles, extras);
@@ -312,6 +314,10 @@ function buildFigureSpecForView(
   const wireFacets = facets && facetYKeys && (encoding || groupCol !== null)
     ? withFacetRows(facets, data, st.facetKey as number, facetYKeys, extras.liveDataset, st.seriesLabels)
     : facets;
+  // Item 24: a plain facet grid's panels carry their rows' per-point texts (a split grid is refused, as on screen).
+  const textFacets = wireFacets && textSrc && extras.liveDataset && st.facetKey != null && !(facetYKeys && (encoding || groupCol !== null))
+    ? marks()?.withFacetTexts(wireFacets, { data, facetCol: st.facetKey, xKey: st.xKey, yKeys: st.yKeys, src: textSrc, live: extras.liveDataset, offset: st.rowRange?.from ?? 0, styles: st.seriesStyles }) ?? wireFacets
+    : wireFacets;
   // F4.2c (a): an encoded request is split server-side, so it keeps EVERY row
   // (the window takes the split's levels over all of them) and names the ones
   // the window does not draw as data in `excluded_rows` -- the backend blanks
@@ -341,6 +347,7 @@ function buildFigureSpecForView(
     plotted, st.seriesStyles, positions, seriesCycle, legends,
     extras.publicationSeriesStyles, groupCol !== null || (encoding !== null && encodingSplits(encoding)),
     { displayChannels, hiddenChannels: st.hiddenChannels }, groupCol === null && encoding === null && !facets ? { ds: extras.liveDataset, rows: wireDataset.time.length } : null, // G24 row states
+    facets ? null : { src: textSrc, range: st.rowRange, live: extras.liveDataset, rows: wireDataset.time.length, all: encoding !== null }, // item 24 texts
   );
   const spec: FigureSpec = {
     dataset: wireDataset,
@@ -360,7 +367,7 @@ function buildFigureSpecForView(
     ...(groupCol === null ? {} : { group_col: groupCol }),
     ...(encoding === null ? {} : { encoding: figureEncodingWire(encoding) }),
     ...(encoding === null || facets || excludedRows.length === 0 ? {} : { excluded_rows: excludedRows }),
-    ...(wireFacets === undefined ? {} : { facets: wireFacets }),
+    ...(textFacets === undefined ? {} : { facets: textFacets as typeof wireFacets }),
     fmt: o.fmt,
     style: o.style,
     dpi: o.dpi,

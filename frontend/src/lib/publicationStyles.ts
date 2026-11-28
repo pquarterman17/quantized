@@ -27,6 +27,7 @@
  * See `sanitizeExportSeriesStyles` below and BUG-016 round 5. */
 import { validLength } from "./lineStyleSanitize";
 import { MARKER_SHAPE_VALUES } from "./seriesStyleCycle";
+import { portableTextFrom } from "./symbolSanitize";
 
 export interface ExportSeriesStyle {
   color?: string;
@@ -65,6 +66,8 @@ export interface ExportSeriesStyle {
   /** Plan item 24 text symbol (`calc.figure_text_symbols`): 1-3 characters per point, font size in points. */
   marker_text?: string;
   marker_text_size?: number;
+  /** Per-point text source a graph template keeps (`portableTextFrom`); the export carries the resolved `marker_texts` instead. */
+  marker_text_from?: "letters" | "rows" | { name: string };
   /** Plan item 17 line polish (`calc.figure_line_style`): the gap between the line and each symbol
    *  (points), the line drawn over its symbols, and the separation of a double line (points). */
   symbol_gap?: number;
@@ -228,6 +231,8 @@ export function sanitizeExportSeriesStyles(value: unknown): (ExportSeriesStyle |
     for (const k of ["size_by", "size_range", "drop_lines", "rug", "rug_length", "rug_opacity", "connect", "error_band", "error_box", "stack_total", "marker_edge", "marker_face", "marker_alpha", "marker_every", "marker_text", "marker_text_size"] as const) {
       if (raw[k] != null) (style as Record<string, unknown>)[k] = raw[k];
     }
+    const from = portableTextFrom(raw.marker_text_from);
+    if (from) style.marker_text_from = from;
     if (validLength(raw.symbol_gap)) style.symbol_gap = raw.symbol_gap; // plan item 17
     if (validLength(raw.double_line)) style.double_line = raw.double_line;
     if (raw.line_front === true) style.line_front = true;

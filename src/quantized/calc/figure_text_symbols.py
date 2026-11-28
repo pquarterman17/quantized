@@ -94,6 +94,11 @@ def apply_text_symbols(line: Any, spec: Mapping[str, Any] | None) -> None:
         )
         rows = rows[:TEXT_SYMBOL_MAX]
     per_row = row_texts(spec, len(ys))
+    if per_row is None and isinstance(spec, Mapping) and isinstance(spec.get("marker_texts"), list):
+        note_figure_warning(
+            "Per-point text symbols do not fit this series' rows, so it keeps "
+            f"{'its text' if text.strip() else 'plain glyphs'}."
+        )
     if per_row is None and not text.strip():
         return  # per-row texts that do not fit the rows, and no literal text: the glyphs stay
     line.set_marker("")

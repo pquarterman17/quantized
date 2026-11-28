@@ -8,6 +8,7 @@
 
 import { PALETTES } from "../../lib/palettes";
 import { isCalcOnlyView } from "../../lib/viewMode";
+import { varyToggled } from "../../lib/subgroupMemory";
 import { type Accent, type Density, type ThemeMode, useApp } from "../../store/useApp";
 import { Select } from "../primitives";
 import { formatShortcut, isMacPlatform } from "../../lib/shortcutFormat";
@@ -101,7 +102,7 @@ export default function AppearancePanel({ onClose }: { onClose: () => void }) {
         <input
           type="checkbox"
           checked={!!autoSeriesStyles}
-          onChange={(e) => setPref("autoSeriesStyles", e.target.checked)}
+          onChange={(e) => setPref("autoSeriesStyles", varyToggled(autoSeriesStyles, e.target.checked))}
         />
         Vary dash &amp; marker
       </label>

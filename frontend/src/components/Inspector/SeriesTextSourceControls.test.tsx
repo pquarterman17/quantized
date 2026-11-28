@@ -53,29 +53,35 @@ describe("the legend swatch of a text symbol", () => {
   });
 });
 
-describe("a split view says why text symbols are not drawn (acceptance 8 U2)", () => {
-  const NOTE = "Text symbols are not drawn on grouped or faceted plots";
-  it("shows the note for a group or a facet, only while a text source is chosen", () => {
+describe("a facet grid that cannot draw text symbols says why (acceptance 8 U2)", () => {
+  const NOTE = "Text symbols are not drawn on a facet grid that is split by a group or an encoding, or that greys excluded rows";
+  it("shows the note only for a split or greyed grid, and only while a text source is chosen", () => {
     const chosen = { markerTextFrom: "rows" } as const;
+    const OFF = { groupKey: null, facetKey: null, excludedDisplay: "hide" as const };
     const { rerender } = render(<SeriesTextSourceControls channel={0} style={chosen} setSeriesStyle={vi.fn()} />);
     expect(screen.queryByRole("note")).toBeNull(); // ungrouped: drawn
     for (const view of [{ groupKey: 1 }, { facetKey: 1 }]) {
-      act(() => useApp.setState({ groupKey: null, facetKey: null, ...view }));
+      act(() => useApp.setState({ ...OFF, ...view }));
+      expect(screen.queryByRole("note")).toBeNull(); // a group alone and a plain facet grid draw it
+    }
+    for (const view of [{ facetKey: 1, groupKey: 1 }, { facetKey: 1, excludedDisplay: "grey" as const }]) {
+      act(() => useApp.setState({ ...OFF, ...view }));
       expect(screen.getByRole("note")).toHaveTextContent(NOTE);
       rerender(<SeriesTextSourceControls channel={0} style={{}} setSeriesStyle={vi.fn()} />);
       expect(screen.queryByRole("note")).toBeNull(); // "The text above" is not per-point text
       rerender(<SeriesTextSourceControls channel={0} style={chosen} setSeriesStyle={vi.fn()} />);
     }
-    expect(screen.getByLabelText("Text symbol source")).toHaveValue("rows"); // the choice is kept for the ungrouped view
-    act(() => useApp.setState({ groupKey: null, facetKey: null }));
+    expect(screen.getByLabelText("Text symbol source")).toHaveValue("rows"); // the choice is kept
+    act(() => useApp.setState(OFF));
     expect(screen.queryByRole("note")).toBeNull();
   });
 });
 
 describe("withMarkerTexts", () => {
-  it("leaves a split series (rows that are not the dataset's) and a plain list alone", () => {
+  it("leaves a series whose rows are not the dataset's rows (or a whole number of blocks of them) alone", () => {
     const list = [{ markerTextFrom: "rows" } as SeriesStyle];
     expect(withMarkerTexts(list, [0], DATASET, [[0, 1]])).toBe(list);
+    expect((withMarkerTexts(list, [0], DATASET, [[0, 1, 2, 3, 4, 5]])[0] as { markerTexts?: string[] }).markerTexts).toEqual(["1", "2", "3", "1", "2", "3"]); // a per-series-X view: the rows once per block
     expect(withMarkerTexts([{ color: "#000" }], [0], DATASET, [[0, 1, 2]])[0]).toEqual({ color: "#000" });
     const out = withMarkerTexts(list, [0], DATASET, [[0, 1, 2]])[0] as { markerTexts?: string[] };
     expect(out.markerTexts).toEqual(["1", "2", "3"]);

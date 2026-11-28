@@ -12,6 +12,7 @@ export { symbolPoints } from "./symbolDetails"; // gap audit 4 G10
 export { lineStylePaths, lineFrontPlugin } from "./uplotLineStyle"; // plan item 17
 export { textSymbolSpec } from "./uplotTextSymbols"; // plan item 24
 export { withMarkerTexts } from "./markerTextRows"; // plan item 24 (Stage/usePlotPayload)
+export { facetTextRefusal, facetTextStyles, withFacetTexts } from "./facetMarkerTexts"; // ... and the facet grid
 export { padMarkerTextWire, withMarkerTextWire } from "./markerTextWire"; // ... and the export request (figureSpecSeries)
 export { rampedStyles } from "./seriesRampImpl"; // gap audit 4 G1 (Stage/useSeriesRamp)
 import { colorScatterFill, paintColorPoint } from "./colorscatter";

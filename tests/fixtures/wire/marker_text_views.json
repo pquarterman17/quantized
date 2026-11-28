@@ -1,0 +1,456 @@
+{
+  "cases": [
+    {
+      "name": "grouped: letters keep their source rows, one text per row in its level",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            3,
+            4,
+            5
+          ],
+          "values": [
+            [
+              10,
+              0
+            ],
+            [
+              11,
+              1
+            ],
+            [
+              13,
+              1
+            ],
+            [
+              14,
+              0
+            ],
+            [
+              15,
+              1
+            ]
+          ],
+          "labels": [
+            "Y",
+            "Factor"
+          ],
+          "units": [
+            "u",
+            ""
+          ],
+          "metadata": {},
+          "cat_levels": {
+            "1": [
+              "A",
+              "B"
+            ]
+          }
+        },
+        "y_keys": [
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "group_col": 1,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#3366cc",
+            "marker_texts": [
+              "A",
+              "B",
+              "D",
+              "E",
+              "F"
+            ],
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "item-24-views"
+      },
+      "canvas": [
+        [
+          {
+            "x": 0,
+            "text": "A"
+          },
+          {
+            "x": 4,
+            "text": "E"
+          }
+        ],
+        [
+          {
+            "x": 1,
+            "text": "B"
+          },
+          {
+            "x": 3,
+            "text": "D"
+          },
+          {
+            "x": 5,
+            "text": "F"
+          }
+        ]
+      ]
+    },
+    {
+      "name": "encoded by colour: row numbers over every row, the excluded one blank",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": [
+            [
+              10,
+              0
+            ],
+            [
+              11,
+              1
+            ],
+            [
+              12,
+              0
+            ],
+            [
+              13,
+              1
+            ],
+            [
+              14,
+              0
+            ],
+            [
+              15,
+              1
+            ]
+          ],
+          "labels": [
+            "Y",
+            "Factor"
+          ],
+          "units": [
+            "u",
+            ""
+          ],
+          "metadata": {},
+          "cat_levels": {
+            "1": [
+              "A",
+              "B"
+            ]
+          }
+        },
+        "y_keys": [
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "encoding": {
+          "color_col": 1
+        },
+        "excluded_rows": [
+          2
+        ],
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#aa3377",
+            "marker_texts": [
+              "1",
+              "2",
+              "3",
+              "4",
+              "5",
+              "6"
+            ],
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "item-24-views"
+      },
+      "canvas": [
+        [
+          {
+            "x": 0,
+            "text": "1"
+          },
+          {
+            "x": 4,
+            "text": "5"
+          }
+        ],
+        [
+          {
+            "x": 1,
+            "text": "2"
+          },
+          {
+            "x": 3,
+            "text": "4"
+          },
+          {
+            "x": 5,
+            "text": "6"
+          }
+        ]
+      ]
+    },
+    {
+      "name": "per-series X: each curve's rows in its own X block",
+      "request": {
+        "dataset": {
+          "time": [
+            1,
+            3,
+            5,
+            9
+          ],
+          "values": [
+            [
+              10,
+              5,
+              null
+            ],
+            [
+              30,
+              9,
+              null
+            ],
+            [
+              null,
+              5,
+              100
+            ],
+            [
+              null,
+              9,
+              300
+            ]
+          ],
+          "labels": [
+            "R1",
+            "T2",
+            "R2"
+          ],
+          "units": [
+            "",
+            "",
+            ""
+          ],
+          "metadata": {
+            "x_column_name": "T1",
+            "x_column_long": "T1 / T2",
+            "x_column_unit": ""
+          }
+        },
+        "y_keys": [
+          0,
+          2
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#228833",
+            "marker_texts": [
+              "1",
+              "3",
+              "1",
+              "3"
+            ],
+            "width": 1.5
+          },
+          {
+            "color": "#884400",
+            "marker_texts": [
+              "A",
+              "C",
+              "A",
+              "C"
+            ],
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "item-24-views"
+      },
+      "canvas": [
+        [
+          {
+            "x": 1,
+            "text": "1"
+          },
+          {
+            "x": 3,
+            "text": "3"
+          }
+        ],
+        [
+          {
+            "x": 5,
+            "text": "A"
+          },
+          {
+            "x": 9,
+            "text": "C"
+          }
+        ]
+      ]
+    },
+    {
+      "name": "a row window: letters number the sheet's rows, not the window's",
+      "request": {
+        "dataset": {
+          "time": [
+            2,
+            3,
+            4
+          ],
+          "values": [
+            [
+              12,
+              0
+            ],
+            [
+              13,
+              1
+            ],
+            [
+              14,
+              0
+            ]
+          ],
+          "labels": [
+            "Y",
+            "Factor"
+          ],
+          "units": [
+            "u",
+            ""
+          ],
+          "metadata": {},
+          "cat_levels": {
+            "1": [
+              "A",
+              "B"
+            ]
+          }
+        },
+        "y_keys": [
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#115577",
+            "marker_texts": [
+              "C",
+              "D",
+              "E"
+            ],
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "item-24-views"
+      },
+      "canvas": [
+        [
+          {
+            "x": 2,
+            "text": "C"
+          },
+          {
+            "x": 3,
+            "text": "D"
+          },
+          {
+            "x": 4,
+            "text": "E"
+          }
+        ]
+      ]
+    }
+  ]
+}

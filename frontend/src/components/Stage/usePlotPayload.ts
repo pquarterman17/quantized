@@ -188,19 +188,20 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
   // overrides land on the right line. Plotted channels come first (in yKeys order,
   // matching the backend), overlays after — those get `undefined` (defaults).
   const loaded = useMarksVersion();
+  const encodedLists = useEncodedLists(encoded, displayPayload, p.seriesStyles, p.seriesLabels); // P1.4
   const styleList = useMemo(() => {
     if (!displayPayload) return undefined;
-    const list = displayPayload.series.map((_, i) => (i < plotted.length ? p.seriesStyles[plotted[i]] : undefined));
-    // Plan item 24: per-point text symbols read their row's text (lazy; a split series has no row to read).
-    return grouped || blockRows ? list : marks()?.withMarkerTexts(list, plotted, active, displayPayload.data) ?? list;
-  }, [displayPayload, plotted, p.seriesStyles, loaded, grouped, blockRows, active]); // eslint-disable-line react-hooks/exhaustive-deps -- loaded: the chunk settling
+    const list = encodedLists?.styleList ?? displayPayload.series.map((_, i) => (i < plotted.length ? p.seriesStyles[plotted[i]] : undefined));
+    // Plan item 24: per-point text symbols read their row's text (lazy). A group split or an encoding keeps every
+    // row; a per-series-X view repeats the SHEET's rows per block, so its texts come from the sheet (`p.active`).
+    return marks()?.withMarkerTexts(list, plotted, blockRows ? p.active : active, displayPayload.data) ?? list;
+  }, [displayPayload, plotted, p.seriesStyles, loaded, blockRows, active, encodedLists]); // eslint-disable-line react-hooks/exhaustive-deps -- loaded: the chunk settling
 
   // Legend-rename overrides (finding 6 offset disclosure) and error-bar
   // magnitudes (finding 3 scaling), both aligned 1:1 to `plotted` -- see
   // usePlotPayloadLogOffsets.ts.
   const labelList = useOffsetLabelList(displayPayload, plotted, p.seriesLabels, p.seriesStyles, offsetsApply);
   const errorBars = useOffsetErrorBars(active, plotted, grouped, p.errKeys, p.seriesStyles, offsetsApply);
-  const encodedLists = useEncodedLists(encoded, displayPayload, p.seriesStyles, p.seriesLabels); // P1.4
 
   // Colour-mapped-scatter specs per plotted series (MAIN #14), same p+1 keying (P1.4: an encoded gradient too); N5 size-by joins once `loaded`.
   const baseColorBy = useMemo(
@@ -408,7 +409,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     payload,
     payloadDatasetId: fetched?.datasetId ?? null,
     plotted,
-    styleList: encodedLists?.styleList ?? styleList,
+    styleList,
     labelList: encodedLists?.labelList ?? labelList,
     legendLabels: encodedLists?.labelList,
     hidden,
