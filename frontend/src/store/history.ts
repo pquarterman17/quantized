@@ -54,7 +54,7 @@ import type { ExtraYAxis } from "../lib/multiYModel";
 import { WORKFLOW_DEFAULTS, workflowPrefsSlot } from "../lib/workflowPrefs";
 import type { AppState } from "./useApp";
 import { restoreTouching } from "./historyTouch";
-import { restorePatch, snapshotOf, type HistorySnapshot } from "./historySnapshot";
+import { mirrorNav, restorePatch, snapshotOf, type HistorySnapshot } from "./historySnapshot";
 
 /** Bounded stack depth, oldest evicted first. The default; the live cap is Preferences ▸ General "Undo steps". */
 export const HISTORY_DEPTH = WORKFLOW_DEFAULTS.undoDepth;
@@ -421,7 +421,7 @@ export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
         if (under?.coalesceKey) rest[rest.length - 1] = closeRun(under);
         return {
           history: rest,
-          future: [...s.future, { label: top.label, snapshot: snapshotOf(s), seq: seq() }].slice(-depth()),
+          future: [...s.future, { label: top.label, snapshot: mirrorNav(top.snapshot, snapshotOf(s)), seq: seq() }].slice(-depth()),
           status: `Undid ${top.label}`,
           ...restorePatch(s, top.snapshot),
         };
@@ -432,7 +432,7 @@ export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
         if (!top) return {};
         return {
           future: s.future.slice(0, -1),
-          history: [...s.history, { label: top.label, snapshot: snapshotOf(s), seq: seq() }].slice(-depth()),
+          history: [...s.history, { label: top.label, snapshot: mirrorNav(top.snapshot, snapshotOf(s)), seq: seq() }].slice(-depth()),
           status: `Redid ${top.label}`,
           ...restorePatch(s, top.snapshot),
         };

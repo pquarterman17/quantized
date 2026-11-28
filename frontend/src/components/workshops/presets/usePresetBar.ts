@@ -52,6 +52,9 @@ export function usePresetBar<S extends object>(adapter: PresetAdapter<S>, opts: 
   const [status, setStatus] = useState<{ text: string; bad: boolean } | null>(null);
   const [source, setSource] = useState<PresetSource>(opts.fromResult ? { kind: "result" } : { kind: "defaults" });
   const [snapshot, setSnapshot] = useState<S | null>(null);
+  // What the panel held when it opened (or after a Revert): "edited" for a source that carries no
+  // settings of its own (defaults, a reopened result, a revert) means "differs from this".
+  const [baseline, setBaseline] = useState(() => canon(adapter.capture()));
   const [naming, setNaming] = useState<"save" | "rename" | null>(null);
   const setAppStatus = useApp((s) => s.setStatus);
 
@@ -131,6 +134,7 @@ export function usePresetBar<S extends object>(adapter: PresetAdapter<S>, opts: 
     if (!snapshot) return;
     const out = adapter.apply(snapshot);
     setSnapshot(null);
+    setBaseline(canon(snapshot));
     setSource({ kind: "reverted" });
     say(out.ok ? "Reverted to the settings you had before applying" : `Could not revert: ${out.reason}`, !out.ok);
   }
@@ -145,7 +149,8 @@ export function usePresetBar<S extends object>(adapter: PresetAdapter<S>, opts: 
       }
       if (clash && !(await askConfirm(`Replace the ${adapter.label} preset "${clash.name}"?`, "A preset with this name already exists; its saved settings are overwritten.", "Replace", true))) return false;
     }
-    const out = naming === "rename" && entry ? backend.rename(entry.id, name) : backend.save(name, adapter.capture());
+    const captured = adapter.capture();
+    const out = naming === "rename" && entry ? backend.rename(entry.id, name) : backend.save(name, captured);
     refresh();
     if (!out.ok) {
       say(out.reason, true);
@@ -153,6 +158,9 @@ export function usePresetBar<S extends object>(adapter: PresetAdapter<S>, opts: 
     }
     setSelected(out.id);
     setNaming(null);
+    // The bar now names what is in the panel: the preset just saved (or renamed).
+    if (naming === "save") setSource({ kind: "preset", name: name.trim(), settings: canon(captured), skip: [] });
+    else if (source.kind === "preset" && entry?.name === source.name) setSource({ ...source, name: name.trim() });
     say(naming === "rename" ? `Renamed to '${name.trim()}'` : `${out.updated ? "Updated" : "Saved"} preset '${name.trim()}'`);
     return true;
   }
@@ -174,7 +182,7 @@ export function usePresetBar<S extends object>(adapter: PresetAdapter<S>, opts: 
 
   const applied = source.kind === "preset" || source.kind === "last-used" ? source.settings : null;
   const skip = source.kind === "preset" || source.kind === "last-used" ? (source.skip ?? []) : [];
-  const edited = applied !== null && canonWithout(adapter.capture(), skip) !== canonWithout(JSON.parse(applied) as object, skip);
+  const edited = applied !== null ? canonWithout(adapter.capture(), skip) !== canonWithout(JSON.parse(applied) as object, skip) : canon(adapter.capture()) !== baseline;
   return {
     listing, last, entry, selected, setSelected, status, source, edited, naming, setNaming,
     canApply: chosenSettings !== null, canRevert: snapshot !== null, canEdit: entry?.state === "ok" || entry?.state === "rejected",
