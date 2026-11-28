@@ -5,8 +5,10 @@
 // and `shapes` (lib/colorscatter.ts), painted by the one colour-scatter plugin:
 // the series' own line stays, the plugin draws every point (rows without a
 // state in the series stroke and glyph). A series that also has a colour-by or
-// size-by keeps those and takes no row states, as the export does
-// (`calc.figure_marks`): provisional, owner to confirm.
+// size-by keeps its spec (the colour scale, the per-row diameters) and gains
+// the row states on top: a row with a state takes its colour and glyph, every
+// other row keeps the scale's colour. The export draws the same
+// (`calc.figure_colorscatter_rows`, `calc.figure_row_states`).
 
 import type { ColorScatterSpec } from "./colorscatter";
 import { rowHex } from "./rowStyleExport";
@@ -39,10 +41,16 @@ export function rowStateSpecs(
   let out = base;
   plotted.forEach((ch, p) => {
     const style = styles[ch];
-    if (!style?.rowStates || style.colorBy != null || style.sizeBy != null) return;
+    if (!style?.rowStates) return;
     fills ??= rows.map((r) => rowHex(rs.color?.[r]));
     shapes ??= rows.map((r) => (rs.marker?.[r] || null) as MarkerShape | null);
+    const have = style.colorBy != null || style.sizeBy != null ? base.get(p + 1) : undefined;
+    if (!have && (style.colorBy != null || style.sizeBy != null)) return; // its colour / size column is empty (or this view draws none): plain
     if (out === base) out = new Map(base);
+    if (have) {
+      out.set(p + 1, { ...have, fills, shapes });
+      return;
+    }
     out.set(p + 1, {
       channel: ch, z: [], colormap: "viridis", lo: 0, hi: 1, flat: true, fills, shapes,
       ...(style.markerShape ? { shape: style.markerShape } : {}),

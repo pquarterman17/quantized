@@ -29,6 +29,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
+from quantized.calc.figure_bubble_pad import tag_bubbles
 from quantized.calc.figure_colorscatter import MARKER_CODES
 
 __all__ = ["draw_row_points", "row_states"]
@@ -66,15 +67,20 @@ def draw_row_points(
     color: Any,
     states: tuple[list[str | None] | None, list[str | None] | None],
     size_pt: float | None = None,
+    sizes: NDArray[np.float64] | None = None,
 ) -> None:
     """Draw each finite row as a point in its row state, one scatter per glyph
-    (matplotlib takes one marker per call)."""
+    (matplotlib takes one marker per call). ``sizes`` (size-by: one diameter in
+    points per row) gives each point its own size and leaves out a row with no
+    finite size, as the canvas does; the bubbles are tagged for the autoscale."""
     colors, markers = states
     default = spec.get("marker_shape")
     default_code = MARKER_CODES.get(default, "o") if isinstance(default, str) else "o"
     pt = float(size_pt or spec.get("marker_size") or _DEFAULT_SIZE_PT)
     hollow = spec.get("marker_fill") == "hollow"
     keep = np.isfinite(xv) & np.isfinite(yv)
+    if sizes is not None:
+        keep &= np.isfinite(sizes)
     groups: dict[str, list[int]] = {}
     for i in np.flatnonzero(keep):
         m = markers[i] if markers else None
@@ -82,4 +88,7 @@ def draw_row_points(
     for code, idx in groups.items():
         fills = [(colors[i] if colors else None) or color for i in idx]
         face = {"facecolors": "none", "edgecolors": fills} if hollow else {"c": fills}
-        ax.scatter(xv[idx], yv[idx], s=pt**2, marker=code, zorder=3, **face)
+        s_pt = sizes[idx] ** 2 if sizes is not None else pt**2
+        sc = ax.scatter(xv[idx], yv[idx], s=s_pt, marker=code, zorder=3, **face)
+        if sizes is not None:
+            tag_bubbles(sc, sizes[idx])

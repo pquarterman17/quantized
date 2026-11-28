@@ -218,7 +218,10 @@ def _draw_marked(
         mark_isolated(ax, line, px, py)
     color = line.get_color()
     if sizes is not None:
-        _scatter_sized(ax, xv, yv, sizes, spec, color)
+        if rows is not None:  # size-by AND row states: each bubble in its row's colour and glyph
+            draw_row_points(ax, xv, yv, spec, color, rows, size_pt, sizes)
+        else:
+            _scatter_sized(ax, xv, yv, sizes, spec, color)
         add_size_legend(ax, spec, color, _marker(spec))
     elif rows is not None:
         draw_row_points(ax, xv, yv, spec, color, rows, size_pt)

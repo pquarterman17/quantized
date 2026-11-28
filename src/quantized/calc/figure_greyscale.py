@@ -204,7 +204,8 @@ def apply_greyscale(
         spec.pop(GREY_SLOT_KEY, None)
         spec.pop(RAMP_RANK_KEY, None)
         if spec.get("color_by") is not None:
-            out.append(spec)  # untouched -- see the doc above
+            spec.pop("row_colors", None)  # G24: row colours go, as for every series below
+            out.append(spec)  # otherwise untouched -- see the doc above
             continue
         k = keys[i]
         spec["color"] = ramp[k]

@@ -55,7 +55,7 @@ export function withRowStateWire(
   const base = styles ?? plotted.map(() => null);
   return plotted.map((ch, i) => {
     const st = seriesStyles[ch];
-    if (!st?.rowStates || st.colorBy != null || st.sizeBy != null) return base[i] ?? null; // as the canvas (lib/rowStyleSpecs.ts)
+    if (!st?.rowStates) return base[i] ?? null; // a colour-by / size-by series carries them too: its rows with a state override the scale (lib/rowStyleSpecs.ts)
     const wire: ExportSeriesStyle & RowStateWire = { ...base[i], ...(colors ? { row_colors: colors } : {}), ...(markers ? { row_markers: markers } : {}) };
     return wire;
   });
