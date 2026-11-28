@@ -34,6 +34,7 @@ async function computeCdfDraw(data: DataStruct, o: SampleOpts): Promise<StatDraw
   const kept = cols.filter((c) => c.values.length > 0);
   if (!kept.length) throw new Error("need ≥ 1 finite value");
   const wire = await statsCdf(kept.map((c) => c.values), o.cdfY, o.cdfBand, o.fit);
+  if (wire.local) void import("../../store/useApp").then((m) => m.useApp.getState().setStatus("The server is not reachable: this CDF was computed in the browser (a fitted CDF needs the server)."));
   return { mode: "cdf", wire, labels: kept.map((c) => c.label), columns: kept.map((c) => c.values), valueLabel: o.valueLabel };
 }
 
