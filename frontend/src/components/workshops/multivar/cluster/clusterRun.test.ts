@@ -89,7 +89,7 @@ describe("runCluster and outputs", () => {
   });
 
   it("the label worksheet is keyed by source row; the centroid table is in original units", () => {
-    const outs = clusterOutputs({ tool: "kmeans", data: KM }, { sourceRows: [3, 4, 9, 10], dropped: 0, columns: ["a", "b"] });
+    const outs = clusterOutputs({ tool: "kmeans", data: KM }, { sourceRows: [3, 4, 9, 10], dropped: 0, columns: ["a", "b"], startCentres: null });
     const labels = outs.find((o) => o.key === "labels")!.data;
     expect(labels.time).toEqual([3, 4, 9, 10]);
     expect(labels.labels).toEqual(["cluster", "silhouette"]);
@@ -105,8 +105,9 @@ describe("runCluster and outputs", () => {
       tool: "hierarchical",
       data: { n: 3, p: 2, method: "average", metric: "euclidean", standardize: "none", cut_by: "k", k: 2, cut_distance: 2,
         labels: [1, 1, 2], counts: [2, 1], linkage: [[0, 1, 1, 2], [2, 3, 5, 3]], cophenetic_correlation: 0.9,
-        dendrogram: { n_leaves: 3, leaf_order: [0, 1, 2], leaf_cluster: [1, 1, 2], segments: [], cut: 2, max_height: 5 } },
-    }, { sourceRows: [1, 2, 3], dropped: 0, columns: ["a", "b"] });
+        dendrogram: { n_leaves: 3, leaf_order: [0, 1, 2], leaf_cluster: [1, 1, 2], segments: [], cut: 2, max_height: 5 },
+        centroids: [[1, 1], [2, 2]], wcss_by_cluster: [0, 0], total_wcss: 0 },
+    }, { sourceRows: [1, 2, 3], dropped: 0, columns: ["a", "b"], startCentres: null });
     expect(outs.map((o) => o.key)).toEqual(["labels", "linkage"]);
     expect(outs[0].data.time).toEqual([1, 2, 3]);
     expect(outs[1].data.labels).toEqual(["cluster A", "cluster B", "height", "size"]);

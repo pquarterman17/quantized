@@ -5824,6 +5824,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stats/cluster-variables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cluster Variables
+         * @description Cluster the COLUMNS by 1 - |r| (or 1 - r): linkage, labels per variable, dendrogram.
+         */
+        post: operations["cluster_variables_api_stats_cluster_variables_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stats/confidence-intervals": {
         parameters: {
             query?: never;
@@ -12782,7 +12802,7 @@ export interface components {
              * @default euclidean
              * @enum {string}
              */
-            metric?: "euclidean" | "cityblock" | "correlation";
+            metric?: "euclidean" | "sqeuclidean" | "cityblock" | "cosine" | "correlation";
             /**
              * Standardize
              * @default zscore
@@ -13110,6 +13130,8 @@ export interface components {
              * @enum {string}
              */
             init?: "kmeans++" | "random";
+            /** Initial Centers */
+            initial_centers?: number[][] | null;
             /** K */
             k: number;
             /**
@@ -13927,7 +13949,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "crop" | "flip" | "rotate" | "transpose" | "plane_level" | "arith" | "scalar" | "fft2d" | "fft_filter" | "image_filter";
+            op: "crop" | "flip" | "rotate" | "transpose" | "plane_level" | "arith" | "scalar" | "fft2d" | "fft_filter" | "image_filter" | "wavelet2d";
             /**
              * Order
              * @default 1
@@ -13972,6 +13994,35 @@ export interface components {
              * @default none
              */
             window?: string;
+            /**
+             * Wt Action
+             * @default denoise
+             */
+            wt_action?: string;
+            /** Wt Level */
+            wt_level?: number | null;
+            /**
+             * Wt Mode
+             * @default symmetric
+             */
+            wt_mode?: string;
+            /**
+             * Wt Threshold
+             * @default soft
+             */
+            wt_threshold?: string;
+            /** Wt Value */
+            wt_value?: number | null;
+            /**
+             * Wt Wavelet
+             * @default db4
+             */
+            wt_wavelet?: string;
+            /**
+             * Wt Zero
+             * @default 1
+             */
+            wt_zero?: string;
             /** X Col */
             x_col?: number | string | null;
             /** Xmax */
@@ -18973,6 +19024,27 @@ export interface components {
             r_b: number;
             /** Thickness */
             thickness?: number | null;
+        };
+        /** VariablesRequest */
+        VariablesRequest: {
+            /** Cut Distance */
+            cut_distance?: number | null;
+            /**
+             * Distance
+             * @default abs
+             * @enum {string}
+             */
+            distance?: "abs" | "signed";
+            /** K */
+            k?: number | null;
+            /**
+             * Method
+             * @default average
+             * @enum {string}
+             */
+            method?: "single" | "complete" | "average" | "ward";
+            /** X */
+            x: number[][];
         };
         /** VarianceTestRequest */
         VarianceTestRequest: {
@@ -28857,6 +28929,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ContingencyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cluster_variables_api_stats_cluster_variables_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VariablesRequest"];
             };
         };
         responses: {

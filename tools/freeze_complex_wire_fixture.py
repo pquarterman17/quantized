@@ -72,6 +72,15 @@ def main() -> None:
             ("im(A)", [0.0] * 4),
             ("conj(A)", col(a)),
             ("arg(-1)", [math.pi] * 4),
+            # item 33: the same parts of a real COLUMN (no complex source), as the app gives them
+            ("real(A) + imag(B)", col(a)),
+            ("abs(A)", col(np.abs(a))),
+            ("abs(B)", col(np.abs(b))),
+            ("arg(A)", col(np.where(a < 0, np.pi, 0.0))),
+            ("angle(B)", col(np.where(b < 0, np.pi, 0.0))),
+            ("conj(B)", col(b)),
+            ("re(A) * im(A) + conj(A)", col(a)),
+            ("arg(A * 0)", col(np.arctan2(0.0, a * 0))),  # -0 is negative: pi
             # C6: a complex result blanks the column, a part of it does not
             ("complex(A, B)", nan4),
             ("2i", nan4),

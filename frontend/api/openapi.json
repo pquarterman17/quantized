@@ -12058,7 +12058,9 @@
             "default": "euclidean",
             "enum": [
               "euclidean",
+              "sqeuclidean",
               "cityblock",
+              "cosine",
               "correlation"
             ],
             "title": "Metric",
@@ -12894,6 +12896,23 @@
             ],
             "title": "Init",
             "type": "string"
+          },
+          "initial_centers": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Initial Centers"
           },
           "k": {
             "maximum": 100.0,
@@ -14839,7 +14858,8 @@
               "scalar",
               "fft2d",
               "fft_filter",
-              "image_filter"
+              "image_filter",
+              "wavelet2d"
             ],
             "title": "Op",
             "type": "string"
@@ -14894,6 +14914,53 @@
           "window": {
             "default": "none",
             "title": "Window",
+            "type": "string"
+          },
+          "wt_action": {
+            "default": "denoise",
+            "title": "Wt Action",
+            "type": "string"
+          },
+          "wt_level": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wt Level"
+          },
+          "wt_mode": {
+            "default": "symmetric",
+            "title": "Wt Mode",
+            "type": "string"
+          },
+          "wt_threshold": {
+            "default": "soft",
+            "title": "Wt Threshold",
+            "type": "string"
+          },
+          "wt_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wt Value"
+          },
+          "wt_wavelet": {
+            "default": "db4",
+            "title": "Wt Wavelet",
+            "type": "string"
+          },
+          "wt_zero": {
+            "default": "1",
+            "title": "Wt Zero",
             "type": "string"
           },
           "x_col": {
@@ -27940,6 +28007,69 @@
         "title": "VanDerPauwRequest",
         "type": "object"
       },
+      "VariablesRequest": {
+        "properties": {
+          "cut_distance": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cut Distance"
+          },
+          "distance": {
+            "default": "abs",
+            "enum": [
+              "abs",
+              "signed"
+            ],
+            "title": "Distance",
+            "type": "string"
+          },
+          "k": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "K"
+          },
+          "method": {
+            "default": "average",
+            "enum": [
+              "single",
+              "complete",
+              "average",
+              "ward"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "x": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "X",
+            "type": "array"
+          }
+        },
+        "required": [
+          "x"
+        ],
+        "title": "VariablesRequest",
+        "type": "object"
+      },
       "VarianceTestRequest": {
         "properties": {
           "alpha": {
@@ -40941,6 +41071,50 @@
           }
         },
         "summary": "Chi Square Independence Route",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
+    "/api/stats/cluster-variables": {
+      "post": {
+        "description": "Cluster the COLUMNS by 1 - |r| (or 1 - r): linkage, labels per variable, dendrogram.",
+        "operationId": "cluster_variables_api_stats_cluster_variables_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VariablesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Cluster Variables Api Stats Cluster Variables Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cluster Variables",
         "tags": [
           "stats"
         ]

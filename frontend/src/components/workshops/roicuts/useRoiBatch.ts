@@ -32,6 +32,7 @@ import { is2DMap } from "../../../lib/mapdata";
 import { hasQSpace } from "../../../lib/mapdataFetch";
 import { plotSelectedTogether } from "../../../lib/plotSelectedTogether";
 import { plural } from "../../../lib/plural";
+import { polygonRefusal } from "../../../lib/roiPolygon";
 import { normalizeRect, roiBoxBody, roiStatsBody, type BoxCutOptions, type RoiRect } from "../../../lib/roi";
 import type { DataStruct } from "../../../lib/types";
 import { toast } from "../../../store/toasts";
@@ -213,7 +214,7 @@ export function useRoiBatch(): RoiBatchState {
   async function applyToSelected(rect: RoiRect | null, opts: BoxCutOptions = {}): Promise<void> {
     if (busyRef.current) return; // one batch at a time — the panel must not allow a second while one runs
     if (!rect) {
-      toast("draw or type a box first", "danger");
+      toast(useApp.getState().mapPolygon ? polygonRefusal("a batch") : "draw or type a box first", "danger");
       return;
     }
     const ids = useApp.getState().selectedIds;

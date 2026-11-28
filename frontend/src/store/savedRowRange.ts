@@ -23,14 +23,14 @@ import type { AnalysisSelection } from "../lib/analysisSelection";
 import { readRecordedRowRange, recordRowRange, rowRangeRecordRefusal, type RecordedRowRange, type SourceRowRange } from "../lib/inputRowRange";
 import { FIT_MODEL_PRODUCER } from "../lib/fitModelRecipe";
 import type { RowRange } from "../lib/rowRange";
-import { TIME_SERIES_RESULT } from "../lib/toolResultKinds";
+import { CLUSTER_RESULT, TIME_SERIES_RESULT } from "../lib/toolResultKinds";
 import type { Dataset } from "../lib/types";
 import { rowRangeOn } from "./analysisSelection";
 
 /** Snapshot results (their tables live in the envelope). */
 const RANGED_SNAPSHOT_PRODUCERS: ReadonlySet<string> = new Set([
   "distribution-analysis", "fit-y-by-x", "variability-analysis", "outlier-screening", "multivariate-analysis",
-  FIT_MODEL_PRODUCER, TIME_SERIES_RESULT,
+  FIT_MODEL_PRODUCER, TIME_SERIES_RESULT, CLUSTER_RESULT,
 ]);
 
 /** Committed output worksheets. */

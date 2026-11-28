@@ -95,6 +95,7 @@ def _expected(req: dict[str, Any]) -> dict[str, Any]:
     return {
         "xy": [[float(px), float(py)] for px, py in zip(x, y, strict=True)],
         "triangles": tris,
+        "hull": [[float(px), float(py)] for px, py in surf.hull_xy],
         "bounds": [float(b) for b in bounds],
         "line_levels": [float(b) for b in bounds[1:-1]] if req["contour_lines"] else [],
         "fractions": [float(f) for f in fracs],
@@ -168,6 +169,12 @@ def test_the_render_draws_the_pinned_triangulation_levels_and_colours(
     else:
         coll = next(c for c in ax.collections if c.get_array() is not None and c.get_array().size > 10)  # noqa: E501
         assert (coll.norm.vmin, coll.norm.vmax) == pytest.approx(tuple(exp["bounds"]), abs=1e-12)
+        # The heatmap's edge is the hull: the cells are clipped to exactly the
+        # hull polygon the fixture pins (the TypeScript test derives it again).
+        clip = coll.get_clip_path()
+        assert clip is not None
+        drawn = ax.transData.inverted().transform(clip.get_fully_transformed_path().vertices)
+        np.testing.assert_allclose(drawn[: len(exp["hull"])], exp["hull"], rtol=0, atol=1e-9)
     cbar_axes = fig.axes[1]
     assert sorted(cbar_axes.get_ylim()) == pytest.approx([exp["bounds"][0], exp["bounds"][-1]], abs=1e-9)  # noqa: E501
     assert cbar_axes.get_ylabel() == case["request"]["z_label"]

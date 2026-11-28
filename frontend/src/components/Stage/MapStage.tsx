@@ -124,7 +124,7 @@ export default function MapStage({ dataset, windowId }: MapStageProps) {
   // The drawing tools (Box, cut ruler, sector wedge, Pick) and their routing;
   // see useMapTools.ts. Only the Box also works off an RSM pair.
   const tools = useMapTools(active, mapActive, keys, cutSpace, cuts);
-  const { roi, ruler, wedge, pick: pickTool, routed, boxDrawable } = tools;
+  const { roi, ruler, wedge, polygon, pick: pickTool, routed, boxDrawable } = tools;
   // The paint effect and the host box size it keeps in sync live in
   // useMapPaint.ts — see its header (it also returns what THIS instance
   // actually painted, which is what lets its own toolbar stop contradicting
@@ -203,7 +203,7 @@ export default function MapStage({ dataset, windowId }: MapStageProps) {
 
   useRegisterMapExporter(windowId, exportMap);
   // Arming one tool disarms the rest (useMapTools.ts).
-  const { setCutMode, toggleRoi, toggleRuler, toggleWedge, togglePick } = tools;
+  const { setCutMode, toggleRoi, toggleRuler, toggleWedge, togglePick, togglePolygon } = tools;
   const ctx = useMapContextMenu({ datasetId: dsId, canvas: canvasRef.current, cmap, logZ, contourOn, hasColorLimits: mapView.colorLimits != null, cutSpace, onExport: exportMap });
 
   return (
@@ -213,7 +213,7 @@ export default function MapStage({ dataset, windowId }: MapStageProps) {
       <div ref={hostRef} aria-busy={!payloadFresh} data-map-host="" style={{ position: "absolute", inset: 8, top: hostTop }}>
         <canvas
           ref={canvasRef}
-          tabIndex={roi.rect || ruler.ruler ? 0 : -1}
+          tabIndex={roi.rect || ruler.ruler || polygon.focusable ? 0 : -1}
           style={{
             width: "100%",
             height: "100%",
@@ -230,6 +230,7 @@ export default function MapStage({ dataset, windowId }: MapStageProps) {
             roi.onLeave();
             ruler.onLeave();
             wedge.onLeave();
+            polygon.onLeave();
           }}
           onClick={pointer.onClick}
           onDoubleClick={pointer.onDoubleClick}
@@ -253,6 +254,7 @@ export default function MapStage({ dataset, windowId }: MapStageProps) {
             if (!payload) return;
             roi.onKeyDown(ev, payload);
             ruler.onKeyDown(ev, payload);
+            polygon.onKeyDown(ev);
           }}
         />
         {dragPx && (
@@ -303,6 +305,7 @@ export default function MapStage({ dataset, windowId }: MapStageProps) {
             boxActive={roi.mode === "roi"}
             rulerState={ruler}
             wedgeState={wedge}
+            polygonState={polygon}
           />
         )}
       </div>
@@ -356,6 +359,8 @@ export default function MapStage({ dataset, windowId }: MapStageProps) {
           boxDrawable={boxDrawable}
           pickMode={pickTool.mode}
           onTogglePick={togglePick}
+          polygonMode={polygon.mode}
+          onTogglePolygon={togglePolygon}
           onExport={exportMap}
           dockRef={setDock}
         />

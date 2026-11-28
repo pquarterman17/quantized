@@ -17,6 +17,9 @@
 //                         result's id and a digest of its model, and shares its
 //                         source. Deleting the Fit Model result is "source
 //                         missing"; a changed or stale one makes it out of date.
+//   cluster-analysis      one Run of the Multivariate workshop's Clustering tab
+//                         (k-means, hierarchical, variables): the settings as run
+//                         (flat options, columns), the cluster tables and labels.
 //
 // Pure, no store: the result registries (freshness, snapshot key, book, freeze)
 // read it. Recipes are parsed without the live worksheet, and fail closed.
@@ -30,8 +33,9 @@ export const TIME_SERIES_RESULT = "time-series-analysis";
 export const DOE_DESIGN_RESULT = "doe-design";
 export const DOE_EFFECTS_RESULT = "doe-effects";
 export const PROFILER_RESULT = "profiler";
+export const CLUSTER_RESULT = "cluster-analysis";
 
-export const TOOL_RESULT_PRODUCERS: readonly string[] = [TIME_SERIES_RESULT, DOE_DESIGN_RESULT, DOE_EFFECTS_RESULT, PROFILER_RESULT];
+export const TOOL_RESULT_PRODUCERS: readonly string[] = [TIME_SERIES_RESULT, DOE_DESIGN_RESULT, DOE_EFFECTS_RESULT, PROFILER_RESULT, CLUSTER_RESULT];
 
 /** The noun a status line or diagnostic uses for each kind. */
 export const TOOL_RESULT_NOUN: Readonly<Record<string, string>> = {
@@ -39,6 +43,7 @@ export const TOOL_RESULT_NOUN: Readonly<Record<string, string>> = {
   [DOE_DESIGN_RESULT]: "design",
   [DOE_EFFECTS_RESULT]: "design effects analysis",
   [PROFILER_RESULT]: "profile",
+  [CLUSTER_RESULT]: "clustering",
 };
 
 type Flat = Record<string, number | string | boolean | null>;
@@ -91,6 +96,30 @@ export function timeSeriesRecipe(result: AnalysisResult, source?: Dataset): Time
 export const timeSeriesQuestion = (r: TimeSeriesRecipe): CommitSettings => ({
   tool: r.tool, col: r.col, allowIrregular: r.allowIrregular, options: sorted(r.options),
 });
+
+// ---- Clustering -------------------------------------------------------------
+
+export type ClusterKind = "kmeans" | "hierarchical" | "variables";
+
+export interface ClusterRecipe {
+  tool: ClusterKind;
+  /** The picked column indices (-1 is the X column), in the order clustered. */
+  columns: number[];
+  /** The tool's own options, flat (the Clustering tab's section for `tool`). */
+  options: Flat;
+}
+
+export function clusterRecipe(result: AnalysisResult, source?: Dataset): ClusterRecipe | null {
+  const raw = recipeOf(result, CLUSTER_RESULT);
+  const options = flat(raw?.options);
+  const cols = raw?.columns;
+  if (!raw || !options || !["kmeans", "hierarchical", "variables"].includes(String(raw.tool)) || !Array.isArray(cols) ||
+      cols.length < 2 || !cols.every((c) => Number.isInteger(c) && c >= -1 && (!source || c < source.data.labels.length)) ||
+      new Set(cols).size !== cols.length) return null;
+  return { tool: raw.tool as ClusterKind, columns: [...cols as number[]], options };
+}
+
+export const clusterQuestion = (r: ClusterRecipe): CommitSettings => ({ tool: r.tool, columns: r.columns, options: sorted(r.options) });
 
 // ---- DOE: design generation -------------------------------------------------
 

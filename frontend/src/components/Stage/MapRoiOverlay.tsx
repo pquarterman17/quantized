@@ -34,10 +34,12 @@ import { handlePositions, rectToPx, rulerCorners, type RoiRect, type RoiRuler } 
 import type { RoiBoxStats, RoiProfile } from "../../lib/roiMath";
 import type { BoxStats } from "../../lib/api/rsm";
 import { dataToPx, fmt, plotRect } from "./mapRender";
+import MapPolygonOverlay from "./MapPolygonOverlay";
 import MapSectorWedge from "./MapSectorWedge";
 import MapRoiCommitBar from "./MapRoiCommitBar";
 import { boxAxes, rulerAxes, type CollapseAxes } from "./roiAxisNames";
 import { barPosition, boundsOfPoints } from "./roiBarLayout";
+import type { UseMapPolygonState } from "./useMapPolygon";
 import type { UseMapRulerState } from "./useMapRuler";
 import type { UseMapSectorWedgeState } from "./useMapSectorWedge";
 import { isDeleteKey } from "../../lib/deleteKey";
@@ -133,6 +135,8 @@ export interface MapRoiOverlayProps {
   /** The sector-wedge hook's full state (RSM_CUTS_PLAN item 12) — same
    *  grouped-object convention as `rulerState`, for the same reason. */
   wedgeState: UseMapSectorWedgeState;
+  /** The Polygon tool (useMapPolygon.ts), grouped like the ruler and the wedge. */
+  polygonState?: UseMapPolygonState;
   /** Surviving focus target for removeRowSafely — the map canvas (owns the
    *  ROI/ruler keydown), which outlives both commit bars. Hardening review
    *  fix: the bars' ✕/Clear buttons unmount their own bar on click; without
@@ -164,6 +168,7 @@ export default function MapRoiOverlay(props: MapRoiOverlayProps) {
     boxActive,
     rulerState,
     wedgeState,
+    polygonState,
   } = props;
 
   const project = (x: number, y: number) => dataToPx(payload, w, h, x, y);
@@ -223,6 +228,7 @@ export default function MapRoiOverlay(props: MapRoiOverlayProps) {
       )}
 
       <MapSectorWedge payload={payload} w={w} h={h} wedge={wedgeState} />
+      {polygonState && <MapPolygonOverlay payload={payload} w={w} h={h} state={polygonState} focusAnchor={props.focusAnchor} />}
 
       {boxActive && rect && rectPx && (
         <div

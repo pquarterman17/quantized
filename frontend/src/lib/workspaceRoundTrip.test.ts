@@ -52,7 +52,7 @@ function everyFieldChanged(): PlotView {
       { id: "L3", kind: "table", at: [0.05, 0.6, 0.3, 0.2], rows: [["T", "Hc"], ["10", "120"]], header: false },
     ],
     statHideEmptyLevels: true, statShowGroupN: false, statShowSummary: true,
-    statMarks: { box: { points: "none", jitterWidth: 0.5 } },
+    statMarks: { box: { points: "none", jitterWidth: 0.5, sig: { source: { kind: "sheet", datasetId: "d1", a: 0, b: 2, p: 1 }, levels: [{ mark: "+", below: 0.1 }], showP: true, showNs: true } } },
     statPicks: {
       mode: "violin", dist: "logistic", bins: "scott", fit: "laplace", barStack: true,
       cols: { group: [0, "a"], group2: [2, "c"], value: [1, "b"], facet: [2, "c"], color: [0, "a"] },

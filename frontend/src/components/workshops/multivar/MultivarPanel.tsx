@@ -64,17 +64,21 @@ export default function MultivarPanel() {
           {(tab === "correlation" || tab === "splom" || tab === "pca") && <StatsInputReview inputs={m.inputs} rows={multivarTabRows(tab, m.inputs, m)} />}
           <MultivarPresetBar m={m} fromResult={fromResult} />
           <ColumnPicker m={m} />
-          <div style={{ marginTop: 10 }}>
+          {/* Clustering keeps its own result book (its Save result, its tables); the book below is the correlation / PCA one. */}
+          {tab === "cluster" && <div style={{ marginTop: 10 }}>
+            <SegmentedControl options={TAB_OPTIONS} value={tab} onChange={setTab} />
+            <Suspense fallback={null}><ClusterTab m={m} /></Suspense>
+          </div>}
+          {tab !== "cluster" && <div style={{ marginTop: 10 }}>
             <MultivarResultBook m={m} view={<>
               <SegmentedControl options={TAB_OPTIONS} value={tab} onChange={setTab} />
               {tab === "correlation" && <CorrelationView m={m} />}
               {tab === "splom" && <SplomTabView m={m} />}
               {tab === "pca" && <PcaView m={m} />}
               {tab === "ext" && <Suspense fallback={null}><MultivarExtTab m={m} /></Suspense>}
-              {tab === "cluster" && <Suspense fallback={null}><ClusterTab m={m} /></Suspense>}
             </>} />
-          </div>
-          {m.saveResultDisabledReason && (
+          </div>}
+          {tab !== "cluster" && m.saveResultDisabledReason && (
             <div className="qzk-ds-meta" style={{ marginTop: 6, color: "var(--text-faint)" }}>
               {m.saveResultDisabledReason}
             </div>

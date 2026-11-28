@@ -25,7 +25,7 @@ export const DISCRETE_WAVELETS = [
   "coif1", "coif2", "coif3", "coif4", "bior1.3", "bior2.2", "bior3.5", "bior4.4", "rbio3.5", "dmey",
 ];
 export const EXTENSION_MODES = [
-  "symmetric", "periodization", "zero", "constant", "smooth", "reflect", "antisymmetric", "antireflect", "periodic",
+  "symmetric", "periodization", "zero", "constant", "smooth", "reflect", "antisymmetric", "antireflect", "periodic", "origin-periodic",
 ];
 
 export interface SigopWaveletForm {
@@ -46,7 +46,11 @@ export interface SigopWaveletForm {
   reconOff: string;
   /** Smooth: detail levels to zero, comma list ("1,2"). */
   smoothZero: string;
-  denoiseRule: "universal" | "sure";
+  /** Smooth: OriginPro's cutoff, a percentage of the detail coefficients to zero ("" = zero the ticked levels instead). */
+  smoothCutoff: string;
+  denoiseRule: "universal" | "sure" | "percent";
+  /** Rule "percent" (OriginPro's custom threshold): hard threshold at this percentage of the largest detail coefficient. */
+  denoisePercent: string;
   denoiseThreshold: "soft" | "hard";
   denoiseScope: "global" | "per-level";
 }
@@ -67,6 +71,8 @@ export const DEFAULT_SIGOP_WAVELET_FORM: SigopWaveletForm = {
   dwtMode: "symmetric",
   reconOff: "",
   smoothZero: "1",
+  smoothCutoff: "",
+  denoisePercent: "50",
   denoiseRule: "universal",
   denoiseThreshold: "soft",
   denoiseScope: "global",
@@ -127,13 +133,20 @@ export function waveletArgsFromForm(
     const keep = ["A", ...Array.from({ length: level }, (_, i) => String(level - i))].filter((t) => !off.has(t));
     if (keep.length === 0) return "Keep at least one level.";
     args.keep = keep.join(",");
+  } else if (method === "wavelet-smooth" && !blank(f.smoothCutoff)) {
+    if (!(Number.isFinite(num(f.smoothCutoff)) && num(f.smoothCutoff) >= 0 && num(f.smoothCutoff) <= 100)) return "The cutoff must be a percentage from 0 to 100 (or blank to zero ticked levels).";
+    args.cutoff = num(f.smoothCutoff);
   } else if (method === "wavelet-smooth") {
     const zero = levelTokens(f.smoothZero).filter((t) => Number(t) >= 1 && Number(t) <= level);
     if (zero.length === 0) return "Choose at least one detail level to zero.";
     args.zero = zero.join(",");
   } else if (method === "wavelet-denoise") {
     args.rule = f.denoiseRule;
-    args.threshold = f.denoiseThreshold;
+    args.threshold = f.denoiseRule === "percent" ? "hard" : f.denoiseThreshold;
+    if (f.denoiseRule === "percent") {
+      if (!(Number.isFinite(num(f.denoisePercent)) && num(f.denoisePercent) >= 0 && num(f.denoisePercent) <= 100)) return "The threshold must be a percentage from 0 to 100.";
+      args.percent = num(f.denoisePercent);
+    }
     args.scope = f.denoiseScope;
   }
   return { args, channels };

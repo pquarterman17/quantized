@@ -70,6 +70,21 @@ const setMeta = (ws: LoadedWorkspace, key: string, value: unknown): void => {
   d.data = { ...d.data, metadata: { ...d.data.metadata, [key]: value } };
 };
 
+/** A valid PSD spectral recipe (the shape `sanitizeSpectralRecipe` keeps), with `extra` merged in. */
+const spectralRecipe = (extra: Record<string, unknown> = {}): never => ({
+  kind: "spectral", version: 1, operation: "fft", channels: [{ index: 0, label: "R1" }], resample: false, outputType: "psd",
+  sided: "one", window: "hanning", detrend: "mean", zeroPad: 0, segmentLen: 0, overlap: 0.5, filterType: "lowpass",
+  cutoff: [1], order: 4, correlationDemean: true, ...extra,
+}) as never;
+/** A saved Distribution result whose recipe holds `extra` (its CI settings). */
+const addDistributionResult = (ws: LoadedWorkspace, extra: Record<string, unknown>, id = `ar-d-${Object.keys(extra)[0]}`): void => {
+  ws.analysisResults = [...(ws.analysisResults ?? []), {
+    version: 1, id, name: "Distribution", producer: { id: "distribution-analysis", label: "Distribution", version: 1 },
+    sources: [{ datasetId: "c", role: "input" }], outputs: [], warnings: [], createdAt: "2026-11-27T00:00:00.000Z",
+    parameters: { recipe: { col: 0, byCol: null, fitDist: "none", compareOpen: false, percentileInput: 50, ...extra } },
+  }] as never;
+};
+
 /** One edit per gated field (and gated value), keyed `Type.field`. */
 const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   "PlotView.layers": (ws) => editView(ws, (v) => { v.layers = [{ id: "t", kind: "table", rows: [["a", "1"]] } as never]; }),
@@ -204,6 +219,7 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   "StatMarks.compareMethod": (ws) => editView(ws, (v) => { v.statMarks = { box: { compareMethod: "dunnett" } }; }),
   "StatMarks.compareControl": (ws) => editView(ws, (v) => { v.statMarks = { box: { compareControl: "ctrl" } }; }),
   "StatMarks.compareExact": (ws) => editView(ws, (v) => { v.statMarks = { box: { compareExact: true } }; }),
+  "StatMarks.sig": (ws) => editView(ws, (v) => { v.statMarks = { box: { sig: { source: { kind: "result", resultId: "r1" } } } }; }),
   "MapViewState.cellLabels": (ws) => { ws.mapViews = { ...ws.mapViews, [dataset(ws, "c").id]: { ...DEFAULT_MAP_VIEW, cellLabels: { format: "fixed", precision: 2 } } }; },
   "MapViewState.scaleBar": (ws) => { ws.mapViews = { ...ws.mapViews, [dataset(ws, "c").id]: { ...DEFAULT_MAP_VIEW, scaleBar: { corner: "tl", color: "#ffffff", length: 5, label: "5 nm" } } }; },
   "Shape.kind=measure": (ws) => editView(ws, (v) => { v.shapes = [...v.shapes, { id: "sm", kind: "slope", x1: 1, y1: 1, x2: 10, y2: 100 }]; }),
@@ -228,6 +244,17 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
       version: 1, id: "ar-r", name: "Distribution", producer: { id: "distribution-analysis", label: "Distribution", version: 1 },
       sources: [{ datasetId: "c", role: "input" }], outputs: [], warnings: [], createdAt: "2026-11-27T00:00:00.000Z",
       parameters: { rowRange: { from: 20, to: 43, rows: 48 } },
+    }];
+  },
+  // Item 7: nested recipe fields (workspaceRecipeCompat.ts).
+  "SpectralRecipe.psdScaling": (ws) => { Object.assign(dataset(ws, "c"), { derivedFrom: { datasetId: "a", pipeline: "signal" }, analysisRecipe: spectralRecipe({ psdScaling: "spectrum" }) }); },
+  "DistributionRecipe.ciPercent": (ws) => { addDistributionResult(ws, { ciPercent: 99 }); },
+  "DistributionRecipe.ciBootstrap": (ws) => { addDistributionResult(ws, { ciBootstrap: true }); },
+  // A saved polygon ROI (the map's Polygon tool): a kind v0.34.0 and v0.45.0 skip when they read `savedRois`.
+  "RoiDef.kind=polygon": (ws) => {
+    ws.savedRois = [...(ws.savedRois ?? []), {
+      id: "roi-poly", name: "Region", kind: "polygon",
+      polygon: { space: "angular", points: [[0, 0], [4, 0], [2, 3]] },
     }];
   },
   "Dataset.linkedCurves": (ws) => {
@@ -716,7 +743,7 @@ function populate(ws: LoadedWorkspace): void {
   };
   const shade: Required<RegionShade> = { id: "pg", x1: 0, x2: 1, y1: 0, y2: 1, fill: "#ccc", axis: 0, fullHeight: true };
   const inset: Required<InsetView> = { x: [0, 1], y: [0, 1], y2: [0, 1], yZoom: true, at: [0.1, 0.1, 0.3, 0.3], lines: true };
-  const marks: Required<StatMarks> = { points: "all", jitter: true, jitterWidth: 0.5, summary: "mean", errorBars: "sd", connectMeans: true, labelRotation: 45, labelWrap: true, comparisons: "letters", compareMethod: "tukey", compareControl: "c", compareExact: true };
+  const marks: Required<StatMarks> = { points: "all", jitter: true, jitterWidth: 0.5, summary: "mean", errorBars: "sd", connectMeans: true, labelRotation: 45, labelWrap: true, comparisons: "letters", compareMethod: "tukey", compareControl: "c", compareExact: true, sig: { source: { kind: "result", resultId: "r1" } } };
   editView(ws, (v) => {
     v.annotations = [...v.annotations, annotation];
     v.shapes = [...v.shapes, shape];
@@ -777,6 +804,8 @@ function sinkProblems(mutate?: (doc: unknown) => void): { problems: string[]; cl
     // A saved result is v0.34 structure (the frozen file holds none, so its paths look new); only the recorded
     // row range inside its free-form `parameters` is new, and it is gated by name (OG20, workspaceValueGates).
     if (p.startsWith("$.analysisResults[]")) { if (/\.parameters\.rowRange(\.|$)/.test(p)) classified.push("AnalysisResult.parameters.rowRange=gated"); continue; }
+    // A saved ROI is v0.34 structure too (the frozen file holds none); only the polygon kind is new, gated by name.
+    if (p.startsWith("$.savedRois[]")) { if (p.startsWith("$.savedRois[].polygon")) classified.push("RoiDef.kind=polygon=gated"); continue; }
     const why = classify(p);
     if (why === null || why.startsWith("UNCLASSIFIED")) problems.push(`${p}: ${why ?? "outside every classified type"}`);
     else classified.push(why);
