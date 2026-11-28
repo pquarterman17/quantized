@@ -6,7 +6,7 @@
 // PR A2, see history.ts), so every action here inherits undo for free.
 
 import { pruneDanglingWorkbookScopeTemplates } from "../lib/quickPlotTemplates";
-import { PROTECTED_NOTICE, protectedAmong } from "../lib/sheetProtection";
+import { refuseProtected } from "../lib/sheetProtection";
 import { removeDatasetsPatch } from "./removeDatasets";
 import type { AppState } from "./useApp";
 
@@ -74,8 +74,7 @@ export function createWorkbookActionsSlice(set: SliceSet, get: SliceGet): Workbo
       if (!s.workbooks.some((w) => w.id === id)) return;
       if (workbookDeleteBlockers(s, id) != null) return; // fail closed — the menu shows the reason
       const memberIds = s.datasets.filter((d) => d.workbookId === id).map((d) => d.id);
-      const locked = protectedAmong(s.datasets, memberIds);
-      if (locked) return get().setStatus(`${locked.name}: ${PROTECTED_NOTICE}`);
+      if (refuseProtected(s, memberIds)) return;
       // ONE history entry, ONE set() (PR #139 review): the same
       // removeDatasetsPatch the removeDatasets ACTION applies — members land
       // in the SAME recoverable Trash with the SAME reference pruning, never

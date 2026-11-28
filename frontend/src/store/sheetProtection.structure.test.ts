@@ -61,7 +61,7 @@ describe("column type and Set As on a protected sheet", () => {
     const before = sheet();
     st().setChannelType("w", 0, "nominal");
     expect(sheet()).toEqual(before);
-    expect(st().status).toBe(PROTECTED_NOTICE);
+    expect(st().status).toBe(`Run 1: ${PROTECTED_NOTICE}`);
     expect(st().history).toHaveLength(0);
   });
 

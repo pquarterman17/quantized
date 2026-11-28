@@ -28,3 +28,11 @@ export const protectionRefusal = (ds: Pick<Dataset, "protectedSheet"> | undefine
  *  with the reason (Trash counts as a delete); Unprotect is one click. */
 export const protectedAmong = (datasets: readonly Pick<Dataset, "id" | "name" | "protectedSheet">[], ids: readonly string[]) =>
   datasets.find((d) => d.protectedSheet === true && ids.includes(d.id));
+
+/** True (after saying why in the status line) when any of `ids` is protected: the caller stops. One copy of the
+ *  refusal for every store path that renames, deletes or retypes whole sheets. */
+export function refuseProtected(s: { datasets: readonly Dataset[]; setStatus: (m: string) => void }, ids: readonly string[]): boolean {
+  const d = protectedAmong(s.datasets, ids);
+  if (d) s.setStatus(`${d.name}: ${PROTECTED_NOTICE}`);
+  return !!d;
+}

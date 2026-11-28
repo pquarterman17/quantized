@@ -13,7 +13,7 @@
 
 import { applyFormulasWithErrors, baseColumns } from "../lib/formula";
 import { formulaExtension } from "../lib/formulaExt";
-import { PROTECTED_NOTICE, protectedAmong } from "../lib/sheetProtection";
+import { refuseProtected } from "../lib/sheetProtection";
 import { cutSheetRefs } from "../lib/sheetBindings";
 import { pruneEditableFigureRefs } from "./figureLifecycle";
 import { pruneOriginFidelityRefs, pruneOriginFigureRefs } from "./originImport";
@@ -139,8 +139,7 @@ export function removeDatasetsWithTrash(
   ids: readonly string[],
   opts?: { permanent?: boolean },
 ): void {
-  const locked = protectedAmong(get().datasets, ids);
-  if (locked) return get().setStatus(`${locked.name}: ${PROTECTED_NOTICE}`);
+  if (refuseProtected(get(), ids)) return;
   if (opts?.permanent) {
     set((s) => ({
       ...removeDatasetsPatch(s, ids),

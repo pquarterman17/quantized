@@ -42,7 +42,7 @@
 // the move.
 
 import { formulaExtension } from "../lib/formulaExt";
-import { PROTECTED_NOTICE } from "../lib/sheetProtection";
+import { refuseProtected } from "../lib/sheetProtection";
 import {
   createFolder as treeCreateFolder,
   moveDatasetToFolder as treeMoveDatasetToFolder,
@@ -183,7 +183,7 @@ export function createDatasetListEditsSlice(set: SliceSet, get: SliceGet): Datas
       // undo step (review finding: a no-op Library rename did).
       const d = get().datasets.find((x) => x.id === id);
       if (!d || (name.trim() || d.name) === d.name) return;
-      if (d.protectedSheet) return get().setStatus(`${d.name}: ${PROTECTED_NOTICE}`);
+      if (refuseProtected(get(), [id])) return;
       // A name sheet("…") links could not show is refused (lib/sheetRefs.ts).
       const refusal = formulaExtension()?.renameRefusal(get().datasets, id, name.trim());
       if (refusal) return get().setStatus(refusal);
