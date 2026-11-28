@@ -76,7 +76,7 @@ export function sendEditableFigureToReport(s: StoreGet, figureId: string): Promi
  *  the bodies load on demand, the same `runLazy` + `.then(act,
  *  onLoadFailure)` shape as `openPageSetup` above. */
 const loadGraphFormat = () => import("../lib/graphTemplateCommands");
-function graphFormatCommand(
+export function graphFormatCommand(
   s: StoreGet,
   pick: (m: typeof import("../lib/graphTemplateCommands")) => (s: StoreGet) => void | Promise<void>,
 ): void {
@@ -428,7 +428,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       label: "Paste format",
       run: () => graphFormatCommand(s, (m) => m.pasteStageFormat),
     },
-    pasteFormatPartsCommand(s), // plan item 42 (commands/plotStyleCommands.ts)
+    pasteFormatPartsCommand(() => graphFormatCommand(s, (m) => m.pasteStageFormatParts)), // plan item 42
     // Gap-audit-2 #13: the same two, onto every graph of a folder or the
     // Library selection, as one undo step (lib/graphFormatBulk.ts).
     {

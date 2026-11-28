@@ -2833,8 +2833,6 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     // regionDecorLoader shape): the axes and bars stay eager.
     { module: "/lib/uplotTurn.ts", loader: "/lib/uplotOrient.ts", call: 'import("./uplotTurn")' },
     { module: "/lib/graphTemplateCommands.ts", loader: "/commands/plotCommands.ts", call: 'import("../lib/graphTemplateCommands")' },
-    // Plan item 42: "Paste format (choose parts)…" reaches the same chunk from its own command file.
-    { module: "/lib/graphTemplateCommands.ts", loader: "/commands/plotStyleCommands.ts", call: 'import("../lib/graphTemplateCommands")' },
     // SLICE 34 (2026-11-25): the Plot menu's "Plot in new window" body (its two readers go with it, DRAGGED_OUT).
     { module: "/commands/plotCommandsLazy.ts", loader: "/commands/plotCommands.ts", call: 'import("./plotCommandsLazy")' },
     // ...and the desktop-shell half of Open / Append workspace (a browser tab never loads it).
