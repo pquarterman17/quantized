@@ -47,6 +47,7 @@ const WORKSHEET_FRONT = "A worksheet is the active window, not a figure: click a
 const SNAPSHOT_FRONT = "A frozen snapshot window can't be exported from here: click a plot or map window instead.";
 const PANEL_FRONT = "A panel window exports through Plot > Multi-panel export…: click a plot or map window to export a single figure.";
 const UNBOUND_MAP = "The active map window has no dataset: drag one onto it, or click a plot window.";
+export const MAP_NOT_READY = "The map isn't ready to export yet: wait for it to finish drawing, then try again.";
 const TAB_NOT_FIGURE = "The Worksheet and Workflow views are not figures: switch to the Plot or Map view first.";
 
 /** Windows on screen: not minimized, and in windows mode not closed in the layout. */
@@ -109,7 +110,7 @@ export function routeFigureTarget(s: StoreGet, verb: FigureVerb): boolean {
     return true;
   }
   const run = mapExporterFor(target.windowId ?? STAGE_MAP_KEY);
-  if (!run) refuse(s, "The map isn't ready to export yet: wait for it to finish drawing, then try again.");
+  if (!run) refuse(s, MAP_NOT_READY);
   else run();
   return true;
 }
